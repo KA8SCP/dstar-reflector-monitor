@@ -45,6 +45,15 @@ $REFLECTORS = [
             'http://ref049.dstargateway.org/',
         ],
     ],
+    'DCS016' => [
+        'name' => 'DCS016',
+        'type' => 'DCS',
+        'host' => 'dcs016.xreflector.net',
+        'urls' => [
+            'http://dcs016.xreflector.net/dcs/',
+            'http://dcs016.xreflector.net/',
+        ],
+    ],
     'XLX038' => [
         'name' => 'XLX038',
         'type' => 'XLXD',

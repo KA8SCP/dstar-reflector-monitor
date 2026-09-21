@@ -8,7 +8,8 @@ function blank_status(array $r): array {
         'name' => $r['name'], 'type' => $r['type'], 'host' => $r['host'],
         'url' => $r['urls'][0], 'online' => false, 'http_code' => 0,
         'response_ms' => null, 'checked_at' => gmdate('c'),
-        'uptime' => null, 'version' => null, 'description' => null,
+        'uptime' => null, 'version' => null, 'drefd_version' => null,
+        'xlx_version' => null, 'dashboard_version' => null, 'dcs_version' => null, 'description' => null,
         'users' => [], 'modules' => [], 'peers' => [], 'last_heard' => [],
         'error' => null,
     ];
@@ -111,10 +112,27 @@ function extract_uptime(string $text): ?string {
     return null;
 }
 
-function extract_version(string $text): ?string {
-    if (preg_match('/(XLX\d+)\s+v([\d.]+)\s*-\s*Dashboard\s+v([\d.]+)/i', $text, $m)) {
-        return $m[1].' v'.$m[2].' · Dashboard v'.$m[3];
-    }
+function extract_xlxd_versions(string $text): array {
+    $out = ['xlx_version'=>null, 'dashboard_version'=>null];
+    if (preg_match('/XLX[0-9A-Z]+\s+v([\d.]+)/i', $text, $m)) $out['xlx_version'] = 'v'.$m[1];
+    if (preg_match('/Dashboard\s+v([\d.]+)/i', $text, $m)) $out['dashboard_version'] = 'v'.$m[1];
+    return $out;
+}
+
+function extract_drefd_version(string $text): ?string {
+    if (preg_match('/DREFD\s+version\s+([A-Za-z0-9._-]+)/i', $text, $m)) return $m[1];
+    if (preg_match('/DREFD\s+v(?:ersion)?\s*([A-Za-z0-9._-]+)/i', $text, $m)) return $m[1];
+    return null;
+}
+
+function extract_dcs_version(string $text): ?string {
+    if (preg_match('/DCS\s+v(?:ersion)?\s*([A-Za-z0-9._-]+)/i', $text, $m)) return $m[1];
+    return null;
+}
+
+function extract_dcs_uptime(string $text): ?string {
+    if (preg_match('/(?:Server\s+)?Uptime\s*:\s*(.*?)(?=\s+(?:DCS\s+v|Interlink|Repeater|User|Sysop|Starttime)\b|$)/i', $text, $m)) return clean_text($m[1]);
+    if (preg_match('/Starttime\s*:\s*([0-9-]+\s+[0-9:]+)/i', $text, $m)) return 'Since '.$m[1];
     return null;
 }
 
@@ -125,7 +143,10 @@ function parse_xlxd(array $r, string $html, int $ms, string $url): array {
     $tables = tables_from_dom($dom);
     $plain = clean_text($dom?->textContent ?? strip_tags($html));
     $s['uptime'] = extract_uptime($plain);
-    $s['version'] = extract_version($plain);
+    $versions = extract_xlxd_versions($plain);
+    $s['xlx_version'] = $versions['xlx_version'];
+    $s['dashboard_version'] = $versions['dashboard_version'];
+    $s['version'] = trim(($s['xlx_version'] ?? '').(($s['xlx_version'] && $s['dashboard_version']) ? ' · ' : '').($s['dashboard_version'] ? 'Dashboard '.$s['dashboard_version'] : '')) ?: null;
 
     // XLXD "Users / Modules" table: Module, Name, Users, DPlus, DExtra, ...
     foreach (find_tables($tables, ['Module','Users','DPlus']) as $t) {
@@ -202,6 +223,9 @@ function parse_dplus(array $r, string $html, int $ms, string $url): array {
     $dom = dom_from_html($html);
     $tables = tables_from_dom($dom);
     $plain = clean_text($dom?->textContent ?? strip_tags($html));
+    $s['uptime'] = extract_uptime($plain);
+    $s['drefd_version'] = extract_drefd_version($plain);
+    $s['version'] = $s['drefd_version'] ? 'DREFD '.$s['drefd_version'] : null;
 
     // DPLUS dashboards commonly publish "Linked Gateways / Reflectors".
     foreach (find_tables($tables, ['Module','Linked to']) as $t) {
@@ -252,6 +276,54 @@ function parse_dplus(array $r, string $html, int $ms, string $url): array {
     return $s;
 }
 
+function parse_dcs(array $r, string $html, int $ms, string $url): array {
+    $s = blank_status($r);
+    $s['online'] = true; $s['http_code'] = 200; $s['response_ms'] = $ms; $s['url'] = $url;
+    $dom = dom_from_html($html);
+    $tables = tables_from_dom($dom);
+    $plain = clean_text($dom?->textContent ?? strip_tags($html));
+    $s['uptime'] = extract_dcs_uptime($plain);
+    $s['dcs_version'] = extract_dcs_version($plain);
+    $s['version'] = $s['dcs_version'] ? 'DCS '.$s['dcs_version'] : null;
+
+    // XReflector DCS dashboards vary by generation. Parse tables by header meaning.
+    foreach ($tables as $t) {
+        if (!$t) continue;
+        $h = strtolower(implode(' ', $t[0]));
+        if (str_contains($h,'module')) {
+            foreach (array_slice($t,1) as $row) {
+                $joined = implode(' ', $row);
+                if (preg_match('/(?:DCS016)?\\s*([A-Z])\\b/i', $joined, $m)) {
+                    $mod = strtoupper($m[1]);
+                    if (!array_filter($s['modules'], fn($x)=>$x['module']===$mod))
+                        $s['modules'][]=['module'=>$mod,'name'=>'','users'=>null,'links'=>array_values(array_filter($row))];
+                }
+            }
+        }
+        if (str_contains($h,'user') || str_contains($h,'callsign')) {
+            foreach (array_slice($t,1,MAX_USERS) as $row) {
+                $call = null;
+                foreach ($row as $cell) if (preg_match('/^[A-Z0-9]{3,8}(?:\\/[A-Z0-9]+)?$/i', trim($cell))) { $call=trim($cell); break; }
+                if (!$call) continue;
+                $mod=''; foreach ($row as $cell) if (preg_match('/^([A-Z])$/',trim($cell),$m)) {$mod=$m[1]; break;}
+                $s['users'][]=['callsign'=>$call,'last_heard'=>end($row) ?: '','module'=>$mod,'via'=>implode(' | ',$row)];
+            }
+        }
+        if (str_contains($h,'repeater') || str_contains($h,'interlink')) {
+            foreach (array_slice($t,1,MAX_PEERS) as $row) {
+                if (!$row) continue;
+                $s['peers'][]=['peer'=>$row[0] ?? '', 'details'=>implode(' | ',array_slice($row,1))];
+            }
+        }
+    }
+    // Module fallback: DCS016A ... DCS016Z references in visible text.
+    if (!$s['modules']) {
+        preg_match_all('/DCS016\\s*([A-Z])\\b/i',$plain,$mm);
+        foreach (array_unique($mm[1] ?? []) as $mod) $s['modules'][]=['module'=>strtoupper($mod),'name'=>'','users'=>null,'links'=>[]];
+    }
+    return $s;
+}
+
 function load_cache(string $key): ?array {
     $file = __DIR__.'/cache/'.preg_replace('/[^A-Za-z0-9_-]/','_',$key).'.json';
     if (!is_file($file) || (time()-filemtime($file)) > CACHE_TTL) return null;
@@ -278,9 +350,10 @@ function get_reflector(array $r): array {
         return $s;
     }
 
-    $s = strtoupper($r['type']) === 'XLXD'
-        ? parse_xlxd($r,$raw['body'],$raw['response_ms'],$raw['url'])
-        : parse_dplus($r,$raw['body'],$raw['response_ms'],$raw['url']);
+    $type = strtoupper($r['type']);
+    if ($type === 'XLXD') $s = parse_xlxd($r,$raw['body'],$raw['response_ms'],$raw['url']);
+    elseif ($type === 'DCS') $s = parse_dcs($r,$raw['body'],$raw['response_ms'],$raw['url']);
+    else $s = parse_dplus($r,$raw['body'],$raw['response_ms'],$raw['url']);
 
     $s['checked_at'] = gmdate('c');
     $s['cached'] = false;
