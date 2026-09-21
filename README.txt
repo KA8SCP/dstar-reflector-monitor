@@ -25,21 +25,21 @@ Verify:
 
 ## Install
 
-    sudo mkdir -p /var/www/html/dstar-monitor
-    sudo cp -a . /var/www/html/dstar-monitor/
+    sudo mkdir -p /var/www/xlxd/dstar-monitor
+    sudo cp -a . /var/www/xlxd/dstar-monitor/
 
 Set ownership:
 
-    sudo chown -R www-data:www-data /var/www/html/dstar-monitor
+    sudo chown -R www-data:www-data /var/www/xlxd/dstar-monitor
 
 Set permissions:
 
-    sudo find /var/www/html/dstar-monitor -type f -exec chmod 644 {} \;
-    sudo chmod 755 /var/www/html/dstar-monitor/cache
+    sudo find /var/www/xlxd/dstar-monitor -type f -exec chmod 644 {} \;
+    sudo chmod 755 /var/www/xlxd/dstar-monitor/cache
 
 Syntax check:
 
-    cd /var/www/html/dstar-monitor
+    cd /var/www/xlxd/dstar-monitor
     php -l config.php
     php -l functions.php
     php -l api.php
@@ -82,3 +82,11 @@ The status is a web-dashboard/application status check, not a direct D-STAR prot
 
 For a true protocol-level monitor, add separate TCP/UDP checks for the relevant D-STAR services and/or run a monitor close to the reflector infrastructure.
 
+
+DEPLOYMENT PATH
+---------------
+The canonical installation path for this project is:
+
+    /var/www/xlxd/dstar-monitor
+
+Do not install this project under /var/www/html/dstar-monitor. If Apache is configured with /var/www/xlxd as the relevant document root or Alias target, the public URL remains /dstar-monitor/ as configured by the server.

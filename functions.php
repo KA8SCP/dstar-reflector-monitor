@@ -8,7 +8,7 @@ function blank_status(array $r): array {
         'name' => $r['name'], 'type' => $r['type'], 'host' => $r['host'],
         'url' => $r['urls'][0], 'online' => false, 'http_code' => 0,
         'response_ms' => null, 'checked_at' => gmdate('c'),
-        'uptime' => null, 'version' => null, 'xlx_version' => null, 'dashboard_version' => null, 'description' => null,
+        'uptime' => null, 'version' => null, 'description' => null,
         'users' => [], 'modules' => [], 'peers' => [], 'last_heard' => [],
         'error' => null,
     ];
@@ -111,12 +111,9 @@ function extract_uptime(string $text): ?string {
     return null;
 }
 
-function extract_version(string $text): ?array {
+function extract_version(string $text): ?string {
     if (preg_match('/(XLX\d+)\s+v([\d.]+)\s*-\s*Dashboard\s+v([\d.]+)/i', $text, $m)) {
-        return [
-            'xlx' => $m[1].' v'.$m[2],
-            'dashboard' => 'Dashboard v'.$m[3],
-        ];
+        return $m[1].' v'.$m[2].' · Dashboard v'.$m[3];
     }
     return null;
 }
@@ -128,13 +125,7 @@ function parse_xlxd(array $r, string $html, int $ms, string $url): array {
     $tables = tables_from_dom($dom);
     $plain = clean_text($dom?->textContent ?? strip_tags($html));
     $s['uptime'] = extract_uptime($plain);
-    $versions = extract_version($plain);
-    if (is_array($versions)) {
-        $s['xlx_version'] = $versions['xlx'] ?? null;
-        $s['dashboard_version'] = $versions['dashboard'] ?? null;
-        // Preserve the combined value for API/backward compatibility.
-        $s['version'] = ($versions['xlx'] ?? '').' · '.($versions['dashboard'] ?? '');
-    }
+    $s['version'] = extract_version($plain);
 
     // XLXD "Users / Modules" table: Module, Name, Users, DPlus, DExtra, ...
     foreach (find_tables($tables, ['Module','Users','DPlus']) as $t) {
