@@ -1,88 +1,81 @@
-# D-STAR Reflector Network Monitor — production v4
+# D-STAR Reflector Network Monitor — production v5
 
-Monitors 10 public D-STAR reflector dashboards:
+Production monitor for REF038, REF039, REF040, REF049, DCS016, XLX038, XLX049, XLX139, XLX351 and XLX978.
 
-- REF038 — ref038.dstargateway.org (DPLUS / DREFD)
-- REF039 — ref039.dstargateway.org (DPLUS / DREFD)
-- REF040 — ref040.dstargateway.org (DPLUS / DREFD)
-- REF049 — ref049.dstargateway.org (DPLUS / DREFD)
-- DCS016 — http://dcs016.xreflector.net/dcs/ (DCS / XReflector)
-- XLX038 — xlx038.dyndns.org (XLXD)
-- XLX049 — xlx049.dyndns.org (XLXD)
-- XLX139 — xlx139.dyndns.org (XLXD)
-- XLX351 — xlx351.dyndns.org (XLXD)
-- XLX978 — xlx978.dyndns.org (XLXD)
+## v5 enhancements
 
-## Service fields by reflector family
+The PHP collectors remain authoritative. The browser now polls `api.php` every 15 seconds, detects online/offline changes and new Last Heard activity, highlights active reflector cards, warns when data becomes stale, and can issue browser notifications after the user grants permission.
 
-REF/DPLUS cards display Service, Uptime (when published), and DREFD Version parsed from the reflector dashboard.
-XLX/XLXD cards display Service, Uptime, XLX Version, and Dashboard Version.
-DCS cards display Service, Uptime/Starttime when available, and DCS Version when published by XReflector.
+A local SQLite database (`data/monitor.sqlite`) records status observations and online/offline transitions. The dashboard displays 24-hour sampled availability; `history_api.php?hours=24` exposes history summaries. Retention defaults to 90 days.
 
-## Requirements
+## Service fields
 
-Debian/Ubuntu Apache/PHP:
+- REF/DPLUS: Service, Uptime, DREFD Version
+- XLX/XLXD: Service, Uptime, XLX Version, Dashboard Version
+- DCS: Service, Uptime/Starttime, DCS Version
+
+## Requirements and installation
+
+Canonical path: `/var/www/xlxd/dstar-monitor`
+
+Install required packages:
 
     sudo apt update
-    sudo apt install apache2 php php-curl php-xml
+    sudo apt install apache2 php php-curl php-xml php-sqlite3 unzip
 
-Verify:
+Back up an existing installation:
 
-    php -m | grep -E 'curl|dom'
+    sudo cp -a /var/www/xlxd/dstar-monitor /var/www/xlxd/dstar-monitor.backup-$(date +%Y%m%d-%H%M%S)
 
-## Canonical installation path
-
-This project MUST be installed at:
-
-    /var/www/xlxd/dstar-monitor
-
-Do not use /var/www/html/dstar-monitor.
-
-## Install / upgrade
-
-Extract the package in a temporary directory, then:
+Extract v5 to a temporary directory, change into the extracted `dstar-reflector-monitor` directory, then deploy:
 
     sudo mkdir -p /var/www/xlxd/dstar-monitor
     sudo cp -a . /var/www/xlxd/dstar-monitor/
-    sudo mkdir -p /var/www/xlxd/dstar-monitor/cache
+    sudo mkdir -p /var/www/xlxd/dstar-monitor/cache /var/www/xlxd/dstar-monitor/data
     sudo chown -R www-data:www-data /var/www/xlxd/dstar-monitor
+    sudo find /var/www/xlxd/dstar-monitor -type d -exec chmod 755 {} \;
     sudo find /var/www/xlxd/dstar-monitor -type f -exec chmod 644 {} \;
-    sudo chmod 755 /var/www/xlxd/dstar-monitor/cache
+    sudo chmod 775 /var/www/xlxd/dstar-monitor/cache /var/www/xlxd/dstar-monitor/data
+
+Verify PHP modules:
+
+    php -m | grep -E 'curl|dom|pdo_sqlite|sqlite3'
 
 Syntax check:
 
     cd /var/www/xlxd/dstar-monitor
     php -l config.php
     php -l functions.php
+    php -l history.php
     php -l api.php
+    php -l history_api.php
     php -l index.php
 
-If Apache maps /var/www/xlxd as its document root or Alias target, open:
+Restart Apache after installing `php-sqlite3`:
 
-    https://YOUR-SERVER/dstar-monitor/
+    sudo systemctl restart apache2
 
-JSON API:
+Open the monitor:
 
-    https://YOUR-SERVER/dstar-monitor/api.php
+    https://xlx839.dyndns.org/dstar-monitor/
 
-## What is displayed
+API endpoints:
 
-- Online/offline web-dashboard status
-- HTTP response time
-- Reflector-family-specific software/version information
-- Service uptime/start time when the remote dashboard publishes it
-- Active/defined modules
-- Reported users/activity
-- Last Heard when published
-- XLX peers and DCS repeater/interlink information when published
-- Direct dashboard link
-- Network-wide Last Heard
-- Callsign/reflector/type filtering
+    https://xlx839.dyndns.org/dstar-monitor/api.php
+    https://xlx839.dyndns.org/dstar-monitor/history_api.php?hours=24
+
+## First-run checks
+
+1. Refresh the dashboard twice, at least 15 seconds apart.
+2. Confirm `data/monitor.sqlite` is created and owned by `www-data`.
+3. Confirm the 24-hour Availability History panel begins showing samples.
+4. Leave the page open for live polling. Browser notifications are optional and require permission in the browser.
+5. If history says SQLite is unavailable, verify `php-sqlite3` is installed and `/var/www/xlxd/dstar-monitor/data` is writable by `www-data`.
+
+## Apache note
+
+The project path is `/var/www/xlxd/dstar-monitor`. Your Apache configuration must already expose `/var/www/xlxd` as the relevant DocumentRoot/Alias so `/dstar-monitor/` resolves correctly. Do not move the project back to `/var/www/html/dstar-monitor`.
 
 ## Operational notes
 
-Polling is cached for 15 seconds per reflector. The browser refreshes the API every 30 seconds. HTTPS is preferred where configured; DCS016 uses its published HTTP dashboard. No remote credentials are required.
-
-Public dashboard HTML varies by reflector family and can change. The parser deliberately reports “Not published” instead of inventing values when a field is absent.
-
-This is a web-dashboard/application monitor, not a direct D-STAR protocol health test. HTTP availability does not prove every D-STAR service is healthy.
+Remote dashboard fetches are cached for 15 seconds. SQLite availability is sample-based: it measures successful dashboard observations, not direct D-STAR protocol uptime. Public dashboard HTML can change, so absent values are reported as “Not published” rather than inferred.

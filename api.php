@@ -3,8 +3,10 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 require_once __DIR__.'/functions.php';
+require_once __DIR__.'/history.php';
 
 $statuses = all_reflectors($REFLECTORS);
+history_record($statuses);
 $online = count(array_filter($statuses, fn($s)=>$s['online']));
 $users = 0; $modules = 0;
 foreach ($statuses as $s) {

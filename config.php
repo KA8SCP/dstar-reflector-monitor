@@ -3,7 +3,8 @@ declare(strict_types=1);
 
 const CACHE_TTL = 15;          // seconds; prevents excessive polling
 const HTTP_TIMEOUT = 10;      // seconds
-const REFRESH_SECONDS = 30;   // browser refresh
+const REFRESH_SECONDS = 15;   // browser live refresh
+const HISTORY_RETENTION_DAYS = 90; // SQLite observation/event retention
 const MAX_LAST_HEARD = 25;
 const MAX_USERS = 50;
 const MAX_PEERS = 25;
