@@ -47,6 +47,24 @@ $REFLECTORS = [
             'http://ref049.dstargateway.org/',
         ],
     ],
+    'REF050' => [
+        'name' => 'REF050',
+        'type' => 'DPLUS',
+        'host' => 'ref050.dstargateway.org',
+        'urls' => [
+            'https://ref050.dstargateway.org/',
+            'http://ref050.dstargateway.org/',
+        ],
+    ],
+    'REF069' => [
+        'name' => 'REF069',
+        'type' => 'DPLUS',
+        'host' => 'ref069.dstargateway.org',
+        'urls' => [
+            'https://ref069.dstargateway.org/',
+            'http://ref069.dstargateway.org/',
+        ],
+    ],
     'DCS016' => [
         'name' => 'DCS016',
         'type' => 'DCS',

@@ -1,14 +1,14 @@
-D-STAR Reflector Monitor v6.2.3
+D-STAR Reflector Monitor v6.2.4
 
-Maintenance release: improves REF/DREFD and XLXD dashboard parsing, Last Heard normalization, Remote User reporting, and XLX module information while retaining the SQLite history reliability improvements from v6.2.1.
+Maintenance release: adds expanded DCS016 monitoring, adds REF050 and REF069, and retains the REF/DREFD, XLXD, Last Heard, Remote User, module, and SQLite history improvements from earlier v6.2 releases.
 
-# D-STAR Reflector Monitor — Production v6.2.3
+# D-STAR Reflector Monitor — Production v6.2.4
 
 Production web monitor for D-STAR reflector dashboards.
 
 ## Version
 
-**v6.2.3 — September 2026**
+**v6.2.4 — September 2026**
 
 v6 consolidates the production monitor and corrects four dashboard parsing/display issues:
 
@@ -31,6 +31,29 @@ v6 consolidates the production monitor and corrects four dashboard parsing/displ
 
 v6 retains the v5 client-side live monitoring and SQLite history features.
 
+
+## v6.2.4 DCS016 and Reflector Expansion
+
+Version 6.2.4 expands DCS and REF monitoring while preserving the existing REF/DREFD and XLXD functionality.
+
+### DCS016 improvements
+
+- Parses the DCS **Users Online** page.
+- Displays DCS callsigns, modules, Last Heard timestamps, source reflector/link, system, and group information.
+- Parses the DCS **Connected Stations** page.
+- Displays connected station, module, band, DCS group, linked time, and connection path.
+- Builds active DCS module information from Users Online and Connected Stations.
+- Adds DCS activity to the network-wide **Last Heard** display.
+- Calculates DCS uptime from the reflector's published `Start_Time`.
+- Displays the DCS software version published by the reflector.
+- Uses **N/A** for DCS Country where the source dashboard does not publish country information.
+
+### New REF/DPLUS reflectors
+
+- **REF050** — `ref050.dstargateway.org`
+- **REF069** — `ref069.dstargateway.org`
+
+Both use the existing DREFD parser for Remote Users, Modules, Linked Gateways, Last Heard, and DREFD Version.
 
 ## v6.2.3 REF/DREFD Linked Gateways
 

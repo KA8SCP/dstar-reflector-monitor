@@ -316,7 +316,7 @@ function parse_dplus(array $r, string $html, int $ms, string $url): array {
         $s['linked_gateway_count'] = (int)$m[2];
     }
 
-    // Linked Gateways / Reflectors. Preserve modules A-E and report only gateway links actually published by DREFD.
+    // Linked Gateways / Reflectors. Preserve every available REF module, including unlinked ones.
     // REF/DREFD Linked Gateways table.
     // Modules A-E are columns. Only accept rows that match the five-column
     // gateway layout so nested Remote Users / Last Heard tables are ignored.
@@ -498,6 +498,181 @@ function parse_dplus(array $r, string $html, int $ms, string $url): array {
 
     return $s;
 }
+function parse_dcs_users(string $html): array {
+    $users = [];
+    $dom = dom_from_html($html);
+    $tables = tables_from_dom($dom);
+
+    foreach ($tables as $t) {
+        if (!$t) continue;
+
+        $headerRow = -1;
+        $map = [];
+
+        foreach (array_slice($t,0,4,true) as $ri=>$row) {
+            $lower = array_map(fn($v)=>strtolower(trim($v)), $row);
+
+            if (
+                in_array('mycall',$lower,true) &&
+                in_array('myref',$lower,true) &&
+                in_array('last heard',$lower,true)
+            ) {
+                $headerRow = $ri;
+
+                foreach ($lower as $i=>$name) {
+                    $map[$name] = $i;
+                }
+                break;
+            }
+        }
+
+        if ($headerRow < 0) continue;
+
+        foreach (array_slice($t,$headerRow+1) as $row) {
+            $call = trim($row[$map['mycall']] ?? '');
+
+            if (!preg_match('/^[A-Z0-9]{3,8}(?:\/[A-Z0-9]+)?$/i',$call)) {
+                continue;
+            }
+
+            $myref = trim($row[$map['myref']] ?? '');
+            $source = trim($row[$map['s+modul'] ?? -1] ?? '');
+            $last = trim($row[$map['last heard']] ?? '');
+
+            $module = '';
+            if (preg_match('/DCS\d+\s+([A-Z])\b/i',$myref,$m)) {
+                $module = strtoupper($m[1]);
+            }
+
+            $users[] = [
+                'callsign'   => strtoupper($call),
+                'module'     => $module,
+                'last_heard' => $last,
+                'via'        => $source,
+                'myref'      => $myref,
+                'message'    => trim($row[$map['message'] ?? -1] ?? ''),
+                'system'     => trim($row[$map['system'] ?? -1] ?? ''),
+                'group'      => trim($row[$map['group'] ?? -1] ?? ''),
+                'group_dtmf' => trim($row[$map['group dtmf'] ?? -1] ?? '')
+            ];
+
+            if (count($users) >= MAX_USERS) break;
+        }
+
+        if ($users) break;
+    }
+
+    return $users;
+}
+
+function parse_dcs_status(string $html): array {
+    $peers = [];
+    $dom = dom_from_html($html);
+    $tables = tables_from_dom($dom);
+
+    foreach ($tables as $t) {
+        if (!$t) continue;
+
+        $headerRow = -1;
+        $map = [];
+
+        foreach (array_slice($t,0,5,true) as $ri=>$row) {
+            $lower = array_map(fn($v)=>strtolower(trim($v)), $row);
+
+            if (
+                in_array('dv station',$lower,true) &&
+                in_array('band',$lower,true) &&
+                in_array('linked',$lower,true) &&
+                in_array('dcs group',$lower,true)
+            ) {
+                $headerRow = $ri;
+
+                foreach ($lower as $i=>$name) {
+                    $map[$name] = $i;
+                }
+                break;
+            }
+        }
+
+        if ($headerRow < 0) continue;
+
+        foreach (array_slice($t,$headerRow+1) as $row) {
+            $station = trim($row[$map['dv station']] ?? '');
+
+            if (!preg_match('/^[A-Z0-9]{3,8}(?:\/[A-Z0-9]+)?$/i',$station)) {
+                continue;
+            }
+
+            $group = trim($row[$map['dcs group']] ?? '');
+
+            $module = '';
+            if (preg_match('/^\(([A-Z])\)/i',$group,$m)) {
+                $module = strtoupper($m[1]);
+            }
+
+            $peers[] = [
+                'peer'     => strtoupper($station),
+                'station'  => strtoupper($station),
+                'module'   => $module,
+                'band'     => trim($row[$map['band']] ?? ''),
+                'linked'   => trim($row[$map['linked']] ?? ''),
+                'group'    => $group,
+                'via'      => trim($row[$map['via']] ?? ''),
+                'software' => trim($row[$map['software']] ?? ''),
+                't_status' => trim($row[$map['t-status']] ?? '')
+            ];
+
+            if (count($peers) >= MAX_PEERS) break;
+        }
+
+        if ($peers) break;
+    }
+
+    return $peers;
+}
+
+
+function extract_dcs_log_uptime(string $log): ?string {
+    if (!preg_match_all(
+        '/Start_Time=(\d{4}-\d{2}-\d{2})(\d{2}:\d{2}:\d{2})/',
+        $log,
+        $matches,
+        PREG_SET_ORDER
+    )) {
+        return null;
+    }
+
+    // Use the most recently published Start_Time value.
+    $last = end($matches);
+    $startText = $last[1].' '.$last[2];
+
+    try {
+        $tz = new DateTimeZone('America/New_York');
+        $start = new DateTimeImmutable($startText, $tz);
+        $now = new DateTimeImmutable('now', $tz);
+
+        if ($start > $now) {
+            return null;
+        }
+
+        $diff = $start->diff($now);
+
+        $parts = [];
+
+        if ($diff->days > 0) {
+            $parts[] = $diff->days.' '.($diff->days === 1 ? 'day' : 'days');
+        }
+
+        $parts[] = $diff->h.' '.($diff->h === 1 ? 'hour' : 'hours');
+        $parts[] = $diff->i.' '.($diff->i === 1 ? 'minute' : 'minutes');
+
+        return implode(' ', $parts);
+
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
 function parse_dcs(array $r, string $html, int $ms, string $url): array {
     $s = blank_status($r);
     $s['online'] = true; $s['http_code'] = 200; $s['response_ms'] = $ms; $s['url'] = $url;
@@ -672,6 +847,136 @@ function get_reflector(array $r): array {
     }
     elseif ($type === 'DCS') {
         $s = parse_dcs($r,$raw['body'],$raw['response_ms'],$raw['url']);
+
+        // XReflector DCS publishes user activity on a separate page.
+        $parts = parse_url($raw['url']);
+
+        if (!empty($parts['host'])) {
+            $scheme = $parts['scheme'] ?? 'http';
+            $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+
+            // DCS operational log publishes the reflector Start_Time.
+        $logUrl = $scheme.'://'.$parts['host'].$port.'/dcs/log/ccs.log';
+        $logRaw = fetch_any([$logUrl]);
+
+        if ($logRaw['ok']) {
+            $dcsUptime = extract_dcs_log_uptime($logRaw['body']);
+
+            if ($dcsUptime !== null) {
+                $s['uptime'] = $dcsUptime;
+            }
+
+            // DCS operational log also publishes the reflector version.
+            if (preg_match_all(
+                '/Version=([^&\\s]+)/',
+                $logRaw['body'],
+                $versionMatches
+            )) {
+                $versions = $versionMatches[1] ?? [];
+
+                if ($versions) {
+                    $dcsVersion = trim(end($versions));
+
+                    if ($dcsVersion !== '') {
+                        $s['dcs_version'] = $dcsVersion;
+                        $s['version'] = 'DCS '.$dcsVersion;
+                    }
+                }
+            }
+        }
+
+        $userUrl = $scheme.'://'.$parts['host'].$port.'/dcs/_user.html';
+            $userRaw = fetch_any([$userUrl]);
+
+            if ($userRaw['ok']) {
+                $dcsUsers = parse_dcs_users($userRaw['body']);
+
+                if ($dcsUsers) {
+                    $s['users'] = $dcsUsers;
+
+                    // DCS _user.html provides authoritative Last Heard activity.
+                    $s['last_heard'] = [];
+
+                    foreach ($dcsUsers as $u) {
+                        if (empty($u['callsign']) || empty($u['last_heard'])) {
+                            continue;
+                        }
+
+                        $s['last_heard'][] = [
+                            'callsign'   => $u['callsign'],
+                            'module'     => $u['module'] ?? '',
+                            'last_heard' => $u['last_heard'],
+                            'via'        => $u['via'] ?? '',
+                            'system'     => $u['system'] ?? '',
+                            'message'    => $u['message'] ?? '',
+                            'group'      => $u['group'] ?? '',
+                            'type'       => 'DCS'
+                        ];
+                    }
+                }
+            }
+
+            // XReflector DCS publishes connected stations separately.
+            $statusUrl = $scheme.'://'.$parts['host'].$port.'/dcs/_status.html';
+            $statusRaw = fetch_any([$statusUrl]);
+
+            if ($statusRaw['ok']) {
+                $dcsPeers = parse_dcs_status($statusRaw['body']);
+
+                if ($dcsPeers) {
+                    $s['peers'] = $dcsPeers;
+                }
+
+                // Build the DCS active-module list from published
+                // Users Online and Connected Stations data.
+                $activeModules = [];
+
+                foreach ($s['users'] as $u) {
+                    $mod = strtoupper(trim($u['module'] ?? ''));
+                    if (preg_match('/^[A-Z]$/', $mod)) {
+                        $activeModules[$mod] = true;
+                    }
+                }
+
+                foreach ($s['peers'] as $p) {
+                    $mod = strtoupper(trim($p['module'] ?? ''));
+                    if (preg_match('/^[A-Z]$/', $mod)) {
+                        $activeModules[$mod] = true;
+                    }
+                }
+
+                if ($activeModules) {
+                    ksort($activeModules);
+
+                    $s['modules'] = [];
+
+                    foreach (array_keys($activeModules) as $mod) {
+                        $userCount = 0;
+                        $stationCount = 0;
+
+                        foreach ($s['users'] as $u) {
+                            if (($u['module'] ?? '') === $mod) {
+                                $userCount++;
+                            }
+                        }
+
+                        foreach ($s['peers'] as $p) {
+                            if (($p['module'] ?? '') === $mod) {
+                                $stationCount++;
+                            }
+                        }
+
+                        $s['modules'][] = [
+                            'module' => $mod,
+                            'name' => '',
+                            'users' => $userCount,
+                            'stations' => $stationCount,
+                            'links' => []
+                        ];
+                    }
+                }
+            }
+        }
     }
     else {
         $s = parse_dplus($r,$raw['body'],$raw['response_ms'],$raw['url']);

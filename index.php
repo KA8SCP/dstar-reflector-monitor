@@ -37,7 +37,7 @@ section{padding:0 12px 12px}h3{font-size:13px;margin:5px 0 8px;color:#cbd5e1;bor
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="title">📡 D-STAR Reflector Network Monitor</div><div class="sub">REF/DPLUS · DCS · XLX/XLXD — REF038 · REF039 · REF040 · REF049 · DCS016 · XLX038 · XLX049 · XLX139 · XLX351 · XLX978</div></div></header>
+<header><div class="wrap"><div class="title">📡 D-STAR Reflector Network Monitor</div><div class="sub">REF/DPLUS · DCS · XLX/XLXD — REF038 · REF039 · REF040 · REF049 · REF050 · REF069 · DCS016 · XLX038 · XLX049 · XLX139 · XLX351 · XLX978</div></div></header>
 <main class="wrap">
 <div id="alertbar" class="alertbar"></div>
 <div class="stats" id="stats"></div>
@@ -88,7 +88,8 @@ function render(){
  document.querySelector('#cards').innerHTML=rs.map(card).join('');
  document.querySelector('#lastheard').innerHTML=(data.last_heard||[]).slice(0,100).map(x=>{
   const isREF=x.type==='DPLUS' || String(x.reflector||'').startsWith('REF');
-  const country=isREF?'N/A':(x.country||'—');
+  const isDCS=x.type==='DCS' || String(x.reflector||'').startsWith('DCS');
+  const country=(isREF||isDCS)?'N/A':(x.country||'—');
   const extra=isREF?(x.message||'—'):(x.suffix||'—');
   const via=isREF?'N/A':(x.via||'—');
   const heard=isREF?(x.time||'—'):(x.last_heard||x.time||'—');
@@ -135,8 +136,18 @@ function card(r){
   return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.module)}</td><td>${esc(u.last_heard)}</td><td>${esc(u.via||u.user||u.message||u.type)}</td></tr>`;
  }).join(''):`<tr><td colspan="${r.type==='XLXD'?6:4}" class="muted">No current user data published.</td></tr>`;
  const peerList=r.peers||[];
- const peers=peerList.length?peerList.map(p=>'<tr><td>'+esc(p.peer)+'</td><td>'+esc(p.details)+'</td></tr>').join(''):'<tr><td colspan="2" class="muted">No peer data published.</td></tr>';
- const thirdMetric=r.type==='DPLUS'?`<div class="metric"><b>${(r.modules||[]).length}</b><span>Available Modules</span></div>`:`<div class="metric"><b>${(r.peers||[]).length}</b><span>Peers</span></div>`;
+ const peers=r.type==='DCS'
+  ? (peerList.length
+     ? peerList.map(p=>`<tr><td class="call">${esc(p.station||p.peer||'')}</td><td>${esc(p.module||'')}</td><td>${esc(p.band||'')}</td><td>${esc(p.group||'')}</td><td>${esc(p.linked||'')}</td><td>${esc(p.via||'')}</td></tr>`).join('')
+     : '<tr><td colspan="6" class="muted">No connected stations published.</td></tr>')
+  : (peerList.length
+     ? peerList.map(p=>'<tr><td>'+esc(p.peer)+'</td><td>'+esc(p.details)+'</td></tr>').join('')
+     : '<tr><td colspan="2" class="muted">No peer data published.</td></tr>');
+ const thirdMetric=r.type==='DPLUS'
+ ? `<div class="metric"><b>${(r.modules||[]).length}</b><span>Available Modules</span></div>`
+ : r.type==='DCS'
+ ? `<div class="metric"><b>${(r.peers||[]).length}</b><span>Connected Stations</span></div>`
+ : `<div class="metric"><b>${(r.peers||[]).length}</b><span>Peers</span></div>`;
  const firstMetric=r.type==='DPLUS'
   ? `<div class="metric"><b>${r.remote_user_count??0}</b><span>Remote Users</span></div>`
   : `<div class="metric"><b>${(r.users||[]).length}</b><span>Users reported</span></div>`;
@@ -154,7 +165,9 @@ function card(r){
  <section><h3>Service</h3><div class="servicegrid">${serviceFields(r)}</div></section>
  <section><h3>Modules</h3><div class="modules">${mods}</div></section>
  <section><h3>${r.type==='DPLUS'?'Remote Users':'Users / Activity'}</h3><div class="table"><table><thead>${userHead}</thead><tbody>${users}</tbody></table></div></section>
- ${r.type==='DPLUS'?'':`<section><h3>Peers / Links</h3><div class="table"><table><thead><tr><th>Peer</th><th>Details</th></tr></thead><tbody>${peers}</tbody></table></div></section>`}
+ ${r.type==='DPLUS'?'':r.type==='DCS'
+  ? `<section><h3>Connected Stations</h3><div class="table"><table><thead><tr><th>Station</th><th>Module</th><th>Band</th><th>DCS Group</th><th>Linked</th><th>Via</th></tr></thead><tbody>${peers}</tbody></table></div></section>`
+  : `<section><h3>Peers / Links</h3><div class="table"><table><thead><tr><th>Peer</th><th>Details</th></tr></thead><tbody>${peers}</tbody></table></div></section>`}
  <a class="button" href="${esc(r.url)}" target="_blank" rel="noopener">Open Dashboard ↗</a>
  </article>`;
 }
