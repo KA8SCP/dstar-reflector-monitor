@@ -1,10 +1,10 @@
-# D-STAR Reflector Monitor — Production v6
+# D-STAR Reflector Monitor — Production v6.2
 
 Production web monitor for D-STAR reflector dashboards.
 
 ## Version
 
-**v6 — September 2026**
+**v6.2 — September 2026**
 
 v6 consolidates the production monitor and corrects four dashboard parsing/display issues:
 
@@ -26,6 +26,84 @@ v6 consolidates the production monitor and corrects four dashboard parsing/displ
    - Module metadata stays attached to the correct module.
 
 v6 retains the v5 client-side live monitoring and SQLite history features.
+
+
+## v6.2 SQLite concurrency and history reliability
+
+v6.2 preserves the v6.1 reflector corrections and fixes history locking/read-only behavior. It uses WAL + synchronous=NORMAL, a 5-second SQLite busy timeout, a non-blocking writer lock, one history sample per 60 seconds, non-fatal history failures, and a 5-second browser history timeout. Existing `data/monitor.sqlite` history should be preserved.
+
+### Step-by-step upgrade from v6.1
+
+1. Back up the installation and database:
+```bash
+cd /var/www/xlxd
+sudo cp -a dstar-monitor dstar-monitor.backup-$(date +%Y%m%d-%H%M%S)
+sudo cp -a dstar-monitor/data/monitor.sqlite /root/monitor.sqlite.backup-$(date +%Y%m%d-%H%M%S)
+```
+
+2. Extract v6.2 in a temporary directory. Do not replace your existing `data/monitor.sqlite`; the ZIP intentionally contains no SQLite database.
+
+3. Copy v6.2 application files:
+```bash
+cd /path/to/extracted/dstar-reflector-monitor-production-v6.2
+sudo cp -a config.php functions.php history.php history_api.php api.php index.php .htaccess README.md README.txt /var/www/xlxd/dstar-monitor/
+```
+
+4. Correct permissions:
+```bash
+sudo mkdir -p /var/www/xlxd/dstar-monitor/cache /var/www/xlxd/dstar-monitor/data
+sudo chown -R www-data:www-data /var/www/xlxd/dstar-monitor/cache /var/www/xlxd/dstar-monitor/data
+sudo chmod 775 /var/www/xlxd/dstar-monitor/cache /var/www/xlxd/dstar-monitor/data
+sudo chmod 664 /var/www/xlxd/dstar-monitor/data/monitor.sqlite
+sudo find /var/www/xlxd/dstar-monitor/data -type f -name 'monitor.sqlite-*' -exec chown www-data:www-data {} \; -exec chmod 664 {} \;
+```
+
+5. Verify writes:
+```bash
+sudo -u www-data test -w /var/www/xlxd/dstar-monitor/data && echo "DATA DIR WRITE OK"
+sudo -u www-data test -w /var/www/xlxd/dstar-monitor/data/monitor.sqlite && echo "DATABASE WRITE OK"
+```
+
+6. Confirm PHP SQLite modules:
+```bash
+php -m | grep -Ei 'sqlite|pdo'
+```
+
+7. Syntax check:
+```bash
+cd /var/www/xlxd/dstar-monitor
+php -l config.php
+php -l functions.php
+php -l history.php
+php -l history_api.php
+php -l api.php
+php -l index.php
+```
+
+8. Restart Apache:
+```bash
+sudo systemctl restart apache2
+```
+
+9. Test history and live API:
+```bash
+curl -sS --max-time 10 "http://127.0.0.1/dstar-monitor/history_api.php?hours=24"
+curl -sS --max-time 30 "http://127.0.0.1/dstar-monitor/api.php" | head -40
+```
+
+10. Verify SQLite mode:
+```bash
+sudo -u www-data php -r '$db=new PDO("sqlite:/var/www/xlxd/dstar-monitor/data/monitor.sqlite"); echo $db->query("PRAGMA journal_mode")->fetchColumn(),PHP_EOL; echo $db->query("PRAGMA busy_timeout")->fetchColumn(),PHP_EOL;'
+```
+Expected: `wal` and `5000`.
+
+11. Open the dashboard. If history fails, it now says `History temporarily unavailable. Live reflector monitoring is still operating.` and the live dashboard continues.
+
+12. After several minutes check for new errors:
+```bash
+sudo tail -n 100 /var/log/apache2/error.log | grep -E 'DSTAR history|database is locked|readonly database'
+```
+No new lock/read-only messages should appear.
 
 ## Monitored reflectors
 

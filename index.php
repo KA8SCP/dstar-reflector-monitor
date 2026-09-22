@@ -72,7 +72,11 @@ function detectChanges(oldData,newData){
 }
 function notify(msg){if(Notification.permission==='granted') new Notification('D-STAR Monitor',{body:msg});}
 function staleCheck(){const age=Math.floor((Date.now()-lastSuccess)/1000), b=document.querySelector('#alertbar');if(age>REFRESH_MS/1000*3){b.style.display='block';b.textContent=`DATA STALE — last successful update ${age} seconds ago`;}else b.style.display='none';}
-async function loadHistory(){try{const r=await fetch('history_api.php?hours=24&ts='+Date.now(),{cache:'no-store'});const h=await r.json();const el=document.querySelector('#history');if(!h.enabled){el.innerHTML='<span class="muted">SQLite history is unavailable. Check php-sqlite3 and data directory permissions.</span>';return;}el.innerHTML=(h.reflectors||[]).map(x=>`<div class="historyitem"><b>${esc(x.reflector)}</b><div>${esc(x.availability_pct)}% available</div><span class="muted">${esc(x.samples)} samples · avg ${esc(x.avg_response_ms??'—')} ms</span></div>`).join('')||'<span class="muted">History will appear after samples are collected.</span>';}catch(e){document.querySelector('#history').innerHTML='<span class="muted">History unavailable.</span>';}}
+async function loadHistory(){
+ const el=document.querySelector('#history');const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),5000);
+ try{const r=await fetch('history_api.php?hours=24&ts='+Date.now(),{cache:'no-store',signal:controller.signal});if(!r.ok)throw new Error('HTTP '+r.status);const h=await r.json();if(!h.enabled){el.innerHTML='<span class="muted">History temporarily unavailable. Live reflector monitoring is still operating.</span>';return;}el.innerHTML=(h.reflectors||[]).map(x=>`<div class="historyitem"><b>${esc(x.reflector)}</b><div>${esc(x.availability_pct)}% available</div><span class="muted">${esc(x.samples)} samples · avg ${esc(x.avg_response_ms??'—')} ms</span></div>`).join('')||'<span class="muted">History will appear after samples are collected.</span>';}
+ catch(e){el.innerHTML='<span class="muted">History temporarily unavailable. Live reflector monitoring is still operating.</span>';}finally{clearTimeout(timer);}
+}
 function render(){
  const f=document.querySelector('#filter').value.toLowerCase(), type=document.querySelector('#type').value;
  const rs=data.reflectors.filter(r=>(!type||r.type===type)&&(!f||[r.name,r.host,r.type,...r.users.map(x=>x.callsign||'')].join(' ').toLowerCase().includes(f)));
