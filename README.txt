@@ -1,10 +1,14 @@
-D-STAR Reflector Monitor — Production v6.2
+D-STAR Reflector Monitor v6.2.1
+
+Maintenance release: fixes browser-side JavaScript syntax errors that could leave the 24-hour Availability History at 'Loading history…'. It also adds defensive handling for missing users/modules/peers arrays and ensures history initialization runs even if initial card rendering fails.
+
+D-STAR Reflector Monitor — Production v6.2.1
 
 Production web monitor for D-STAR reflector dashboards.
 
  Version
 
-v6.2 — September 2026
+v6.2.1 — September 2026
 
 v6 consolidates the production monitor and corrects four dashboard parsing/display issues:
 
@@ -27,9 +31,9 @@ v6 consolidates the production monitor and corrects four dashboard parsing/displ
 
 v6 retains the v5 client-side live monitoring and SQLite history features.
 
- v6.2 SQLite concurrency and history reliability
+ v6.2.1 SQLite concurrency and history reliability
 
-v6.2 preserves the v6.1 reflector corrections and fixes history locking/read-only behavior. It uses WAL + synchronous=NORMAL, a 5-second SQLite busy timeout, a non-blocking writer lock, one history sample per 60 seconds, non-fatal history failures, and a 5-second browser history timeout. Existing data/monitor.sqlite history should be preserved.
+v6.2.1 preserves the v6.1 reflector corrections and fixes history locking/read-only behavior. It uses WAL + synchronous=NORMAL, a 5-second SQLite busy timeout, a non-blocking writer lock, one history sample per 60 seconds, non-fatal history failures, and a 5-second browser history timeout. Existing data/monitor.sqlite history should be preserved.
 
  Step-by-step upgrade from v6.1
 
@@ -39,11 +43,11 @@ cd /var/www/xlxd
 sudo cp -a dstar-monitor dstar-monitor.backup-$(date +%Y%m%d-%H%M%S)
 sudo cp -a dstar-monitor/data/monitor.sqlite /root/monitor.sqlite.backup-$(date +%Y%m%d-%H%M%S)
 
-2. Extract v6.2 in a temporary directory. Do not replace your existing data/monitor.sqlite; the ZIP intentionally contains no SQLite database.
+2. Extract v6.2.1 in a temporary directory. Do not replace your existing data/monitor.sqlite; the ZIP intentionally contains no SQLite database.
 
-3. Copy v6.2 application files:
+3. Copy v6.2.1 application files:
 
-cd /path/to/extracted/dstar-reflector-monitor-production-v6.2
+cd /path/to/extracted/dstar-reflector-monitor-production-v6.2.1
 sudo cp -a config.php functions.php history.php historyapi.php api.php index.php .htaccess README.md README.txt /var/www/xlxd/dstar-monitor/
 
 4. Correct permissions:

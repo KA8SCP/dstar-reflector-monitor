@@ -79,7 +79,7 @@ async function loadHistory(){
 }
 function render(){
  const f=document.querySelector('#filter').value.toLowerCase(), type=document.querySelector('#type').value;
- const rs=data.reflectors.filter(r=>(!type||r.type===type)&&(!f||[r.name,r.host,r.type,...r.users.map(x=>x.callsign||'')].join(' ').toLowerCase().includes(f)));
+ const rs=data.reflectors.filter(r=>(!type||r.type===type)&&(!f||[r.name,r.host,r.type,...(r.users||[]).map(x=>x.callsign||'')].join(' ').toLowerCase().includes(f)));
  const online=data.summary.online;
  document.querySelector('#stats').innerHTML=[
   [''+data.summary.total,'Reflectors'],[''+online,'Online'],[''+data.summary.offline,'Offline'],[''+data.summary.users,'Reported Users'],[''+data.summary.modules,'Reported Modules']
@@ -98,15 +98,16 @@ function serviceFields(r){
  return state+uptime+item('Software',r.version);
 }
 function card(r){
- const sortedMods=[...r.modules].sort((a,b)=>String(a.module||'').localeCompare(String(b.module||''));
+ const sortedMods=[...(r.modules||[])].sort((a,b)=>String(a.module||'').localeCompare(String(b.module||'')));
  const mods=sortedMods.length?sortedMods.map(m=>`<span class="mod ${m.users>0?'active':''}"><b>${esc(m.module)}</b>${m.name?' · '+esc(m.name):''}${m.users!==null&&m.users!==undefined?' · '+esc(m.users)+' users':''}${m.links?.length?' · '+esc(m.links.join(', ')):''}</span>`).join(''):'<span class="muted">No module data published</span>';
- const users=r.users.length?r.users.slice(0,50).map(u=>`<tr>${r.type==='XLXD'?`<td>${esc(u.country||'')}</td>`:''}<td class="call">${esc(u.callsign)}</td>${r.type==='XLXD'?`<td>${esc(u.suffix||'')}</td>`:''}<td>${esc(u.module)}</td><td>${esc(u.last_heard)}</td><td>${esc(u.via||u.user||u.message||u.type)}</td></tr>`).join(''):`<tr><td colspan="${r.type==='XLXD'?6:4}" class="muted">No current user data published.</td></tr>`;
- const peers=r.peers.length?r.peers.map(p=>`<tr><td>${esc(p.peer)}</td><td>${esc(p.details)}</td></tr>`).join(''):'<tr><td colspan="2" class="muted">No peer data published.</td></tr>`;
- const thirdMetric=r.type==='DPLUS'?`<div class="metric"><b>${r.modules.length}</b><span>Available Modules</span></div>`:`<div class="metric"><b>${r.peers.length}</b><span>Peers</span></div>`;
+ const users=(r.users||[]).length?(r.users||[]).slice(0,50).map(u=>`<tr>${r.type==='XLXD'?`<td>${esc(u.country||'')}</td>`:''}<td class="call">${esc(u.callsign)}</td>${r.type==='XLXD'?`<td>${esc(u.suffix||'')}</td>`:''}<td>${esc(u.module)}</td><td>${esc(u.last_heard)}</td><td>${esc(u.via||u.user||u.message||u.type)}</td></tr>`).join(''):`<tr><td colspan="${r.type==='XLXD'?6:4}" class="muted">No current user data published.</td></tr>`;
+ const peerList=r.peers||[];
+ const peers=peerList.length?peerList.map(p=>'<tr><td>'+esc(p.peer)+'</td><td>'+esc(p.details)+'</td></tr>').join(''):'<tr><td colspan="2" class="muted">No peer data published.</td></tr>';
+ const thirdMetric=r.type==='DPLUS'?`<div class="metric"><b>${(r.modules||[]).length}</b><span>Available Modules</span></div>`:`<div class="metric"><b>${(r.peers||[]).length}</b><span>Peers</span></div>`;
  const userHead=r.type==='XLXD'?'<tr><th>Country / Flag</th><th>Callsign</th><th>Suffix</th><th>Module</th><th>Last Heard</th><th>Via / Peer</th></tr>':'<tr><th>Callsign</th><th>Module</th><th>Last TX / Heard</th><th>Via / User</th></tr>';
  return `<article class="card ${recentActivity.has(r.name)?'activity':''}">
  <div class="chead"><div><div class="rname">${esc(r.name)}</div><div class="rtype">${esc(r.type)} · ${esc(r.host)}</div></div><div class="status ${r.online?'on':'off'}"><span class="dot ${r.online?'dgreen':'dred'}"></span>${r.online?'ONLINE':'OFFLINE'}</div></div>
- <div class="metrics"><div class="metric"><b>${r.users.length}</b><span>${r.type==='DPLUS'?'Remote Users':'Users reported'}</span></div><div class="metric"><b>${r.modules.length}</b><span>Modules</span></div>${thirdMetric}<div class="metric"><b>${r.response_ms??'—'}${r.response_ms?' ms':''}</b><span>Response</span></div></div>
+ <div class="metrics"><div class="metric"><b>${(r.users||[]).length}</b><span>${r.type==='DPLUS'?'Remote Users':'Users reported'}</span></div><div class="metric"><b>${(r.modules||[]).length}</b><span>Modules</span></div>${thirdMetric}<div class="metric"><b>${r.response_ms??'—'}${r.response_ms?' ms':''}</b><span>Response</span></div></div>
  <section><h3>Service</h3><div class="servicegrid">${serviceFields(r)}</div></section>
  <section><h3>Modules</h3><div class="modules">${mods}</div></section>
  <section><h3>${r.type==='DPLUS'?'Remote Users':'Users / Activity'}</h3><div class="table"><table><thead>${userHead}</thead><tbody>${users}</tbody></table></div></section>
@@ -123,7 +124,9 @@ async function refresh(){
 }
 document.querySelector('#filter').addEventListener('input',render);
 document.querySelector('#type').addEventListener('change',render);
-render(); loadHistory(); staleCheck();
+try { render(); } catch(e) { console.error('Initial render error:', e); }
+loadHistory();
+staleCheck();
 if('Notification' in window && Notification.permission==='default') { document.addEventListener('click',()=>Notification.requestPermission(),{once:true}); }
 setInterval(refresh,REFRESH_MS); setInterval(staleCheck,5000); setInterval(loadHistory,60000);
 </script>
