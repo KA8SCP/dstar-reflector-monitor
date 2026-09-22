@@ -1,2 +1,4 @@
 cache/*.json
 !cache/.gitkeep
+data/*.sqlite*
+!data/.gitkeep

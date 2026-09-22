@@ -75,7 +75,16 @@ function tables_from_dom(?DOMDocument $dom): array {
         foreach ($xp->query('.//tr', $table) as $tr) {
             $cells = [];
             foreach ($xp->query('./th|./td', $tr) as $cell) {
-                $cells[] = clean_text($cell->textContent);
+                $txt = clean_text($cell->textContent);
+                if ($txt === '') {
+                    foreach ($xp->query('.//img', $cell) as $img) {
+                        $alt = clean_text((string)$img->getAttribute('alt'));
+                        $title = clean_text((string)$img->getAttribute('title'));
+                        if ($alt !== '') { $txt = $alt; break; }
+                        if ($title !== '') { $txt = $title; break; }
+                    }
+                }
+                $cells[] = $txt;
             }
             if ($cells) $rows[] = $cells;
         }
@@ -148,15 +157,14 @@ function parse_xlxd(array $r, string $html, int $ms, string $url): array {
     $s['dashboard_version'] = $versions['dashboard_version'];
     $s['version'] = trim(($s['xlx_version'] ?? '').(($s['xlx_version'] && $s['dashboard_version']) ? ' · ' : '').($s['dashboard_version'] ? 'Dashboard '.$s['dashboard_version'] : '')) ?: null;
 
-    // XLXD "Users / Modules" table: Module, Name, Users, DPlus, DExtra, ...
+    // XLXD Users / Modules table.
     foreach (find_tables($tables, ['Module','Users','DPlus']) as $t) {
         foreach (array_slice($t, 1) as $row) {
             if (!isset($row[0])) continue;
             $mod = strtoupper(trim($row[0]));
-            if (preg_match('/^[A-I]$/', $mod)) {
+            if (preg_match('/^[A-Z]$/', $mod)) {
                 $s['modules'][] = [
-                    'module'=>$mod,
-                    'name'=>$row[1] ?? '',
+                    'module'=>$mod, 'name'=>$row[1] ?? '',
                     'users'=>isset($row[2]) && is_numeric($row[2]) ? (int)$row[2] : null,
                     'links'=>array_values(array_filter(array_slice($row, 3), fn($v)=>$v!==''))
                 ];
@@ -164,118 +172,134 @@ function parse_xlxd(array $r, string $html, int $ms, string $url): array {
         }
     }
 
-    // Generic XLXD user/live tables.
+    // XLXD user/live tables. Map by header names instead of fixed column offsets.
     foreach ($tables as $t) {
         if (!$t) continue;
-        $h = strtolower(implode(' ', $t[0]));
-        if (str_contains($h,'callsign') && (str_contains($h,'last heard') || str_contains($h,'last tx') || str_contains($h,'listening on'))) {
-            foreach (array_slice($t,1,MAX_USERS) as $row) {
-                if (!isset($row[0]) || $row[0]==='') continue;
-                $s['users'][] = [
-                    'callsign'=>$row[1] ?? $row[0],
-                    'suffix'=>$row[2] ?? '',
-                    'via'=>$row[3] ?? '',
-                    'last_heard'=>$row[4] ?? ($row[5] ?? ''),
-                    'module'=>end($row) ?: ''
-                ];
+        $headerRow = -1; $map = [];
+        foreach (array_slice($t,0,3,true) as $ri=>$hdr) {
+            $lower=array_map(fn($v)=>strtolower(trim($v)),$hdr);
+            if (!in_array('callsign',$lower,true)) continue;
+            $headerRow=$ri;
+            foreach ($lower as $i=>$h) {
+                if ($h==='callsign') $map['callsign']=$i;
+                elseif (str_contains($h,'flag') || str_contains($h,'country')) $map['country']=$i;
+                elseif (str_contains($h,'suffix') || str_contains($h,'dprs')) $map['suffix']=$i;
+                elseif (str_contains($h,'via') || str_contains($h,'peer')) $map['via']=$i;
+                elseif (str_contains($h,'last heard') || str_contains($h,'last tx')) $map['last_heard']=$i;
+                elseif (str_contains($h,'listening on') || $h==='module') $map['module']=$i;
             }
+            break;
         }
-    }
-
-    // Peers / nodes.
-    foreach (find_tables($tables, ['Peer','Protocol']) as $t) {
-        foreach (array_slice($t,1,MAX_PEERS) as $row) {
-            if (!isset($row[0]) || $row[0]==='') continue;
-            $s['peers'][] = [
-                'peer'=>$row[0],
-                'details'=>implode(' | ', array_slice($row,1))
+        if ($headerRow < 0 || !isset($map['callsign'])) continue;
+        foreach (array_slice($t,$headerRow+1,MAX_USERS) as $row) {
+            $call=trim($row[$map['callsign']] ?? '');
+            if ($call==='' || !preg_match('/^[A-Z0-9][A-Z0-9\/\-]{2,15}$/i',$call)) continue;
+            $s['users'][]=[
+                'country'=>isset($map['country']) ? ($row[$map['country']] ?? '') : '',
+                'callsign'=>$call,
+                'suffix'=>isset($map['suffix']) ? ($row[$map['suffix']] ?? '') : '',
+                'via'=>isset($map['via']) ? ($row[$map['via']] ?? '') : '',
+                'last_heard'=>isset($map['last_heard']) ? ($row[$map['last_heard']] ?? '') : '',
+                'module'=>isset($map['module']) ? ($row[$map['module']] ?? '') : ''
             ];
         }
     }
 
-    // D-Star live / last-heard style tables.
+    foreach (find_tables($tables, ['Peer','Protocol']) as $t) {
+        foreach (array_slice($t,1,MAX_PEERS) as $row) {
+            if (!isset($row[0]) || $row[0]==='') continue;
+            $s['peers'][]=['peer'=>$row[0],'details'=>implode(' | ',array_slice($row,1))];
+        }
+    }
+
     foreach ($tables as $t) {
         if (!$t) continue;
-        $h = strtolower(implode(' ', $t[0]));
+        $h=strtolower(implode(' ',$t[0]));
         if (str_contains($h,'mycall') || str_contains($h,'last heard')) {
             foreach (array_slice($t,1,MAX_LAST_HEARD) as $row) {
                 if (!isset($row[0]) || $row[0]==='') continue;
-                $s['last_heard'][] = [
-                    'callsign'=>$row[0],
-                    'time'=>$row[1] ?? '',
-                    'module'=>$row[2] ?? '',
-                    'details'=>implode(' | ', array_slice($row,3))
-                ];
+                $s['last_heard'][]=['callsign'=>$row[0],'time'=>$row[1]??'','module'=>$row[2]??'','details'=>implode(' | ',array_slice($row,3))];
             }
         }
     }
 
-    // XLXD pages expose module assignments even if there are no current users.
-    if (!$s['modules']) {
-        foreach (module_letters($plain) as $m) $s['modules'][]=['module'=>$m,'name'=>'','users'=>null,'links'=>[]];
-    }
+    if (!$s['modules']) foreach (module_letters($plain) as $m) $s['modules'][]=['module'=>$m,'name'=>'','users'=>null,'links'=>[]];
+    // Always present XLX modules alphabetically and remove duplicate module rows.
+    $byModule=[];
+    foreach ($s['modules'] as $m) $byModule[strtoupper($m['module'])]=$m;
+    ksort($byModule,SORT_STRING);
+    $s['modules']=array_values($byModule);
     return $s;
 }
-
 function parse_dplus(array $r, string $html, int $ms, string $url): array {
     $s = blank_status($r);
     $s['online'] = true; $s['http_code'] = 200; $s['response_ms'] = $ms; $s['url'] = $url;
-    $dom = dom_from_html($html);
-    $tables = tables_from_dom($dom);
+    $dom = dom_from_html($html); $tables = tables_from_dom($dom);
     $plain = clean_text($dom?->textContent ?? strip_tags($html));
     $s['uptime'] = extract_uptime($plain);
     $s['drefd_version'] = extract_drefd_version($plain);
     $s['version'] = $s['drefd_version'] ? 'DREFD '.$s['drefd_version'] : null;
 
-    // DPLUS dashboards commonly publish "Linked Gateways / Reflectors".
-    foreach (find_tables($tables, ['Module','Linked to']) as $t) {
-        foreach (array_slice($t,1) as $row) {
-            if (count($row)<2) continue;
-            $mod = strtoupper(trim($row[0]));
-            if (preg_match('/^[A-I]$/',$mod)) {
-                $s['modules'][]=['module'=>$mod,'name'=>'','users'=>null,'links'=>[$row[1]]];
-            }
+    // Linked Gateways / Reflectors. Preserve every available REF module, including unlinked ones.
+    foreach ($tables as $t) {
+        $all=strtolower(implode(' ',array_map(fn($r)=>implode(' ',$r),array_slice($t,0,3))));
+        if (!str_contains($all,'module') || !str_contains($all,'linked')) continue;
+        foreach ($t as $row) {
+            if (count($row)<1) continue;
+            $mod=strtoupper(trim($row[0]));
+            if (preg_match('/^[A-E]$/',$mod)) $s['modules'][]=['module'=>$mod,'name'=>'','users'=>null,'links'=>isset($row[1])&&$row[1]!==''?[$row[1]]:[]];
         }
     }
+    // REF/DREFD reflectors expose modules A-E; include unlinked modules so the count is accurate.
+    $existing=[]; foreach ($s['modules'] as $m) $existing[$m['module']]=$m;
+    foreach (range('A','E') as $mod) if (!isset($existing[$mod])) $existing[$mod]=['module'=>$mod,'name'=>'','users'=>null,'links'=>['unlinked']];
+    ksort($existing,SORT_STRING); $s['modules']=array_values($existing);
 
-    // Remote Users: Callsign / User / Message / Last TX on / Type
-    foreach (find_tables($tables, ['Remote Users','Callsign','Last TX on']) as $t) {
-        foreach (array_slice($t,1,MAX_USERS) as $row) {
-            if (!isset($row[0]) || !preg_match('/^[A-Z0-9\/\-]{3,8}$/i',$row[0])) continue;
+    // Remote Users table. The title may occupy its own row, so discover the real header row.
+    foreach ($tables as $t) {
+        $tableText=strtolower(implode(' ',array_map(fn($r)=>implode(' ',$r),array_slice($t,0,4))));
+        if (!str_contains($tableText,'remote users')) continue;
+        $headerRow=-1; $map=[];
+        foreach (array_slice($t,0,4,true) as $ri=>$hdr) {
+            foreach ($hdr as $i=>$cell) {
+                $h=strtolower(trim($cell));
+                if ($h==='callsign') $map['callsign']=$i;
+                elseif ($h==='user') $map['user']=$i;
+                elseif (str_contains($h,'message')) $map['message']=$i;
+                elseif (str_contains($h,'last tx')) $map['last_tx']=$i;
+                elseif ($h==='type') $map['type']=$i;
+            }
+            if (isset($map['callsign'])) { $headerRow=$ri; break; }
+        }
+        if ($headerRow<0) continue;
+        foreach (array_slice($t,$headerRow+1,MAX_USERS) as $row) {
+            $call=trim($row[$map['callsign']] ?? '');
+            if ($call==='' || !preg_match('/^[A-Z0-9][A-Z0-9\/\-]{2,15}$/i',$call)) continue;
+            $last=isset($map['last_tx']) ? ($row[$map['last_tx']] ?? '') : '';
+            $module=''; if (preg_match('/\b([A-E])\b/',strtoupper($last),$mm)) $module=$mm[1];
             $s['users'][]=[
-                'callsign'=>$row[0],
-                'user'=>$row[1] ?? '',
-                'message'=>$row[2] ?? '',
-                'last_heard'=>$row[3] ?? '',
-                'module'=>$row[4] ?? ''
+                'callsign'=>$call,'user'=>isset($map['user'])?($row[$map['user']]??''):'',
+                'message'=>isset($map['message'])?($row[$map['message']]??''):'',
+                'last_heard'=>$last,'module'=>$module,
+                'type'=>isset($map['type'])?($row[$map['type']]??''):''
             ];
         }
     }
 
-    // Last Heard table.
-    foreach (find_tables($tables, ['Last Heard','Callsign','Time']) as $t) {
-        foreach (array_slice($t,1,MAX_LAST_HEARD) as $row) {
+    // Last Heard table, allowing a title row before column headers.
+    foreach ($tables as $t) {
+        $tableText=strtolower(implode(' ',array_map(fn($r)=>implode(' ',$r),array_slice($t,0,4))));
+        if (!str_contains($tableText,'last heard')) continue;
+        $headerRow=-1;
+        foreach (array_slice($t,0,4,true) as $ri=>$hdr) if (str_contains(strtolower(implode(' ',$hdr)),'callsign')) {$headerRow=$ri;break;}
+        if ($headerRow<0) continue;
+        foreach (array_slice($t,$headerRow+1,MAX_LAST_HEARD) as $row) {
             if (!isset($row[0]) || $row[0]==='') continue;
-            $s['last_heard'][]=[
-                'callsign'=>$row[0],
-                'time'=>$row[1] ?? '',
-                'module'=>$row[2] ?? '',
-                'details'=>implode(' | ',array_slice($row,3))
-            ];
-        }
-    }
-
-    // Fallback: scan visible text for linked module rows such as "A unlinked".
-    if (!$s['modules']) {
-        foreach (preg_split('/\s{2,}|\n/',$plain) as $line) {
-            if (preg_match('/\b([A-I])\s+(unlinked|not linked|REF\d+[A-Z]?|XRF\d+[A-Z]?|DCS\d+[A-Z]?|XLX\d+[A-Z]?)/i',$line,$m)) {
-                $s['modules'][]=['module'=>strtoupper($m[1]),'name'=>'','users'=>null,'links'=>[$m[2]]];
-            }
+            $s['last_heard'][]=['callsign'=>$row[0],'time'=>$row[1]??'','module'=>$row[2]??'','details'=>implode(' | ',array_slice($row,3))];
         }
     }
     return $s;
 }
-
 function parse_dcs(array $r, string $html, int $ms, string $url): array {
     $s = blank_status($r);
     $s['online'] = true; $s['http_code'] = 200; $s['response_ms'] = $ms; $s['url'] = $url;
