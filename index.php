@@ -48,7 +48,7 @@ section{padding:0 12px 12px}h3{font-size:13px;margin:5px 0 8px;color:#cbd5e1;bor
 </div>
 <div class="network panel" style="padding:14px">
 <h2>Network-wide Last Heard</h2>
-<div class="table"><table><thead><tr><th>Reflector</th><th>Callsign</th><th>Module</th><th>Time</th><th>Details</th></tr></thead><tbody id="lastheard"></tbody></table></div>
+<div class="table"><table><thead><tr><th>Reflector</th><th>Country</th><th>Callsign</th><th>Suffix / User Message</th><th>Via / Peer</th><th>Time</th><th>Module / Last TX</th></tr></thead><tbody id="lastheard"></tbody></table></div>
 </div>
 <div class="network panel" style="padding:14px"><h2>24-hour Availability History</h2><div id="history" class="historygrid"><span class="muted">Loading history…</span></div></div>
 <div class="grid" id="cards"></div>
@@ -86,7 +86,15 @@ function render(){
  ].map(x=>`<div class="stat"><div class="num">${esc(x[0])}</div><div class="lbl">${x[1]}</div></div>`).join('');
  document.querySelector('#updated').textContent='Updated '+new Date(data.updated).toLocaleString();
  document.querySelector('#cards').innerHTML=rs.map(card).join('');
- document.querySelector('#lastheard').innerHTML=(data.last_heard||[]).slice(0,100).map(x=>`<tr><td>${esc(x.reflector)}</td><td class="call">${esc(x.callsign)}</td><td>${esc(x.module)}</td><td>${esc(x.time)}</td><td>${esc(x.details)}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">No Last Heard data published.</td></tr>';
+ document.querySelector('#lastheard').innerHTML=(data.last_heard||[]).slice(0,100).map(x=>{
+  const isREF=x.type==='DPLUS' || String(x.reflector||'').startsWith('REF');
+  const country=isREF?'N/A':(x.country||'—');
+  const extra=isREF?(x.message||'—'):(x.suffix||'—');
+  const via=isREF?'N/A':(x.via||'—');
+  const heard=isREF?(x.time||'—'):(x.last_heard||x.time||'—');
+  const module=isREF?(x.last_tx_status||x.module||'—'):(x.module||'—');
+  return `<tr><td>${esc(x.reflector)}</td><td>${esc(country)}</td><td class="call">${esc(x.callsign)}</td><td>${esc(extra)}</td><td>${esc(via)}</td><td>${esc(heard)}</td><td>${esc(module)}</td></tr>`;
+ }).join('')||'<tr><td colspan="7" class="muted">No Last Heard data published.</td></tr>';
 }
 function serviceFields(r){
  const item=(label,value)=>`<div class="serviceitem"><span class="label">${esc(label)}</span><span class="value">${esc(value||'Not published')}</span></div>`;
@@ -99,15 +107,46 @@ function serviceFields(r){
 }
 function card(r){
  const sortedMods=[...(r.modules||[])].sort((a,b)=>String(a.module||'').localeCompare(String(b.module||'')));
- const mods=sortedMods.length?sortedMods.map(m=>`<span class="mod ${m.users>0?'active':''}"><b>${esc(m.module)}</b>${m.name?' · '+esc(m.name):''}${m.users!==null&&m.users!==undefined?' · '+esc(m.users)+' users':''}${m.links?.length?' · '+esc(m.links.join(', ')):''}</span>`).join(''):'<span class="muted">No module data published</span>';
- const users=(r.users||[]).length?(r.users||[]).slice(0,50).map(u=>`<tr>${r.type==='XLXD'?`<td>${esc(u.country||'')}</td>`:''}<td class="call">${esc(u.callsign)}</td>${r.type==='XLXD'?`<td>${esc(u.suffix||'')}</td>`:''}<td>${esc(u.module)}</td><td>${esc(u.last_heard)}</td><td>${esc(u.via||u.user||u.message||u.type)}</td></tr>`).join(''):`<tr><td colspan="${r.type==='XLXD'?6:4}" class="muted">No current user data published.</td></tr>`;
+ const mods=sortedMods.length?sortedMods.map(m=>{
+  if(r.type==='XLXD'){
+   const userText=m.users!==null&&m.users!==undefined
+    ? ` · ${esc(m.users)} ${m.users===1?'user':'users'}`
+    : '';
+   return `<span class="mod ${m.users>0?'active':''}"><b>${esc(m.module)}</b>${m.name?' · '+esc(m.name):''}${userText}</span>`;
+  }
+
+  if(r.type==='DPLUS'){
+   return `<span class="mod"><b>${esc(m.module)}</b></span>`;
+  }
+
+  return `<span class="mod ${m.users>0?'active':''}"><b>${esc(m.module)}</b>${m.name?' · '+esc(m.name):''}${m.users!==null&&m.users!==undefined?' · '+esc(m.users)+' users':''}</span>`;
+ }).join(''):'<span class="muted">No module data published</span>';
+ const users=(r.users||[]).length?(r.users||[]).slice(0,50).map(u=>{
+  if(r.type==='DPLUS'){
+   return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.message||u.user||'')}</td><td>${esc(u.last_heard||u.module||'')}</td><td>${esc(u.type||'')}</td></tr>`;
+  }
+  if(r.type==='XLXD'){
+   return `<tr><td>${esc(u.country||'')}</td><td class="call">${esc(u.callsign)}</td><td>${esc(u.suffix||'')}</td><td>${esc(u.module)}</td><td>${esc(u.last_heard)}</td><td>${esc(u.via||'')}</td></tr>`;
+  }
+  return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.module)}</td><td>${esc(u.last_heard)}</td><td>${esc(u.via||u.user||u.message||u.type)}</td></tr>`;
+ }).join(''):`<tr><td colspan="${r.type==='XLXD'?6:4}" class="muted">No current user data published.</td></tr>`;
  const peerList=r.peers||[];
  const peers=peerList.length?peerList.map(p=>'<tr><td>'+esc(p.peer)+'</td><td>'+esc(p.details)+'</td></tr>').join(''):'<tr><td colspan="2" class="muted">No peer data published.</td></tr>';
  const thirdMetric=r.type==='DPLUS'?`<div class="metric"><b>${(r.modules||[]).length}</b><span>Available Modules</span></div>`:`<div class="metric"><b>${(r.peers||[]).length}</b><span>Peers</span></div>`;
- const userHead=r.type==='XLXD'?'<tr><th>Country / Flag</th><th>Callsign</th><th>Suffix</th><th>Module</th><th>Last Heard</th><th>Via / Peer</th></tr>':'<tr><th>Callsign</th><th>Module</th><th>Last TX / Heard</th><th>Via / User</th></tr>';
+ const firstMetric=r.type==='DPLUS'
+  ? `<div class="metric"><b>${r.remote_user_count??0}</b><span>Remote Users</span></div>`
+  : `<div class="metric"><b>${(r.users||[]).length}</b><span>Users reported</span></div>`;
+ const secondMetric=r.type==='DPLUS'
+  ? `<div class="metric"><b>${r.linked_gateway_count??0}</b><span>Linked Gateways</span></div>`
+  : `<div class="metric"><b>${(r.modules||[]).length}</b><span>Modules</span></div>`;
+ const userHead=r.type==='DPLUS'
+  ? '<tr><th>Callsign</th><th>User Message</th><th>Last TX On</th><th>Type</th></tr>'
+  : r.type==='XLXD'
+   ? '<tr><th>Country / Flag</th><th>Callsign</th><th>Suffix</th><th>Module</th><th>Last Heard</th><th>Via / Peer</th></tr>'
+   : '<tr><th>Callsign</th><th>Module</th><th>Last TX / Heard</th><th>Via / User</th></tr>';
  return `<article class="card ${recentActivity.has(r.name)?'activity':''}">
  <div class="chead"><div><div class="rname">${esc(r.name)}</div><div class="rtype">${esc(r.type)} · ${esc(r.host)}</div></div><div class="status ${r.online?'on':'off'}"><span class="dot ${r.online?'dgreen':'dred'}"></span>${r.online?'ONLINE':'OFFLINE'}</div></div>
- <div class="metrics"><div class="metric"><b>${(r.users||[]).length}</b><span>${r.type==='DPLUS'?'Remote Users':'Users reported'}</span></div><div class="metric"><b>${(r.modules||[]).length}</b><span>Modules</span></div>${thirdMetric}<div class="metric"><b>${r.response_ms??'—'}${r.response_ms?' ms':''}</b><span>Response</span></div></div>
+ <div class="metrics">${firstMetric}${secondMetric}${thirdMetric}<div class="metric"><b>${r.response_ms??'—'}${r.response_ms?' ms':''}</b><span>Response</span></div></div>
  <section><h3>Service</h3><div class="servicegrid">${serviceFields(r)}</div></section>
  <section><h3>Modules</h3><div class="modules">${mods}</div></section>
  <section><h3>${r.type==='DPLUS'?'Remote Users':'Users / Activity'}</h3><div class="table"><table><thead>${userHead}</thead><tbody>${users}</tbody></table></div></section>

@@ -1,14 +1,14 @@
-D-STAR Reflector Monitor v6.2.1
+D-STAR Reflector Monitor v6.2.2
 
-Maintenance release: fixes browser-side JavaScript syntax errors that could leave the 24-hour Availability History at 'Loading history…'. It also adds defensive handling for missing users/modules/peers arrays and ensures history initialization runs even if initial card rendering fails.
+Maintenance release: improves REF/DREFD and XLXD dashboard parsing, Last Heard normalization, Remote User reporting, and XLX module information while retaining the SQLite history reliability improvements from v6.2.1.
 
-D-STAR Reflector Monitor — Production v6.2.1
+D-STAR Reflector Monitor — Production v6.2.2
 
 Production web monitor for D-STAR reflector dashboards.
 
- Version
+Version
 
-v6.2.1 — September 2026
+v6.2.2 — September 2026
 
 v6 consolidates the production monitor and corrects four dashboard parsing/display issues:
 
@@ -31,76 +31,117 @@ v6 consolidates the production monitor and corrects four dashboard parsing/displ
 
 v6 retains the v5 client-side live monitoring and SQLite history features.
 
- v6.2.1 SQLite concurrency and history reliability
+
+v6.2.2 Reflector parsing and module improvements
+
+v6.2.2 builds on v6.2.1 with additional production-tested reflector parsing and display improvements.
+
+- REF/DREFD Remote Users
+  - Parses Remote Users independently from Last Heard activity.
+  - Displays authoritative Remote User and Linked Gateway counts published by the reflector.
+  - Preserves User Message, Last TX On, and Type information.
+
+- REF/DREFD Last Heard
+  - Uses dashboard column headers rather than fixed column positions.
+  - Preserves Callsign, User Message, Last TX On, and Time.
+  - Keeps Last Heard activity separate from the current Remote Users table.
+
+- XLXD Last Heard
+  - Normalizes Country/Flag, Callsign, Suffix, Via/Peer, Last Heard, and Listening On/module fields.
+  - Correctly associates fields with their source dashboard rows.
+
+- Network-wide Last Heard
+  - Combines normalized REF/DREFD and XLXD Last Heard records.
+  - Removes duplicate/bogus records previously introduced from current-user data.
+  - Sorts activity chronologically across reflector families.
+
+- XLXD Modules
+  - Retrieves the dedicated XLXD index.php?show=modules dashboard.
+  - Parses module letter, name, current user count, and published protocol routing information.
+  - Supports the full configured XLX module list rather than only modules inferred from current activity.
+
+- Safety and reliability
+  - Retains the v6.2.1 SQLite WAL, busy-timeout, non-blocking history writer, and browser history protections.
+  - Runtime cache files and SQLite history databases remain excluded from Git.
+
+v6.2.1 SQLite concurrency and history reliability
 
 v6.2.1 preserves the v6.1 reflector corrections and fixes history locking/read-only behavior. It uses WAL + synchronous=NORMAL, a 5-second SQLite busy timeout, a non-blocking writer lock, one history sample per 60 seconds, non-fatal history failures, and a 5-second browser history timeout. Existing data/monitor.sqlite history should be preserved.
 
- Step-by-step upgrade from v6.1
+Step-by-step upgrade from v6.1
 
 1. Back up the installation and database:
-
+bash
 cd /var/www/xlxd
 sudo cp -a dstar-monitor dstar-monitor.backup-$(date +%Y%m%d-%H%M%S)
 sudo cp -a dstar-monitor/data/monitor.sqlite /root/monitor.sqlite.backup-$(date +%Y%m%d-%H%M%S)
 
+
 2. Extract v6.2.1 in a temporary directory. Do not replace your existing data/monitor.sqlite; the ZIP intentionally contains no SQLite database.
 
 3. Copy v6.2.1 application files:
-
+bash
 cd /path/to/extracted/dstar-reflector-monitor-production-v6.2.1
-sudo cp -a config.php functions.php history.php historyapi.php api.php index.php .htaccess README.md README.txt /var/www/xlxd/dstar-monitor/
+sudo cp -a config.php functions.php history.php history_api.php api.php index.php .htaccess README.md README.txt /var/www/xlxd/dstar-monitor/
+
 
 4. Correct permissions:
-
+bash
 sudo mkdir -p /var/www/xlxd/dstar-monitor/cache /var/www/xlxd/dstar-monitor/data
 sudo chown -R www-data:www-data /var/www/xlxd/dstar-monitor/cache /var/www/xlxd/dstar-monitor/data
 sudo chmod 775 /var/www/xlxd/dstar-monitor/cache /var/www/xlxd/dstar-monitor/data
 sudo chmod 664 /var/www/xlxd/dstar-monitor/data/monitor.sqlite
-sudo find /var/www/xlxd/dstar-monitor/data -type f -name 'monitor.sqlite-' -exec chown www-data:www-data {} \; -exec chmod 664 {} \;
+sudo find /var/www/xlxd/dstar-monitor/data -type f -name 'monitor.sqlite-*' -exec chown www-data:www-data {} \; -exec chmod 664 {} \;
+
 
 5. Verify writes:
-
+bash
 sudo -u www-data test -w /var/www/xlxd/dstar-monitor/data && echo "DATA DIR WRITE OK"
 sudo -u www-data test -w /var/www/xlxd/dstar-monitor/data/monitor.sqlite && echo "DATABASE WRITE OK"
 
-6. Confirm PHP SQLite modules:
 
+6. Confirm PHP SQLite modules:
+bash
 php -m | grep -Ei 'sqlite|pdo'
 
-7. Syntax check:
 
+7. Syntax check:
+bash
 cd /var/www/xlxd/dstar-monitor
 php -l config.php
 php -l functions.php
 php -l history.php
-php -l historyapi.php
+php -l history_api.php
 php -l api.php
 php -l index.php
 
-8. Restart Apache:
 
+8. Restart Apache:
+bash
 sudo systemctl restart apache2
 
-9. Test history and live API:
 
-curl -sS --max-time 10 "http://127.0.0.1/dstar-monitor/historyapi.php?hours=24"
+9. Test history and live API:
+bash
+curl -sS --max-time 10 "http://127.0.0.1/dstar-monitor/history_api.php?hours=24"
 curl -sS --max-time 30 "http://127.0.0.1/dstar-monitor/api.php" | head -40
 
-10. Verify SQLite mode:
 
-sudo -u www-data php -r '$db=new PDO("sqlite:/var/www/xlxd/dstar-monitor/data/monitor.sqlite"); echo $db->query("PRAGMA journalmode")->fetchColumn(),PHPEOL; echo $db->query("PRAGMA busytimeout")->fetchColumn(),PHPEOL;'
+10. Verify SQLite mode:
+bash
+sudo -u www-data php -r '$db=new PDO("sqlite:/var/www/xlxd/dstar-monitor/data/monitor.sqlite"); echo $db->query("PRAGMA journal_mode")->fetchColumn(),PHP_EOL; echo $db->query("PRAGMA busy_timeout")->fetchColumn(),PHP_EOL;'
 
 Expected: wal and 5000.
 
 11. Open the dashboard. If history fails, it now says History temporarily unavailable. Live reflector monitoring is still operating. and the live dashboard continues.
 
 12. After several minutes check for new errors:
-
+bash
 sudo tail -n 100 /var/log/apache2/error.log | grep -E 'DSTAR history|database is locked|readonly database'
 
 No new lock/read-only messages should appear.
 
- Monitored reflectors
+Monitored reflectors
 
 The configured production set contains 10 reflectors:
 
@@ -115,9 +156,9 @@ The configured production set contains 10 reflectors:
 - XLX978 — xlx978.dyndns.org
 - DCS016 — http://dcs016.xreflector.net/dcs/
 
- Reflector-family Service fields
+Reflector-family Service fields
 
- REF / DPLUS / DREFD
+REF / DPLUS / DREFD
 Displays:
 - Service state
 - Uptime
@@ -126,7 +167,7 @@ Displays:
 - Remote Users
 - Last Heard/activity
 
- XLX
+XLX
 Displays:
 - Service state
 - Uptime
@@ -137,10 +178,10 @@ Displays:
 - Peers/links
 - Last Heard/activity
 
- DCS
+DCS
 DCS016 uses its own parser and displays the status/version/module/activity information published by its dashboard.
 
- Live client monitoring
+Live client monitoring
 
 The browser periodically refreshes api.php without requiring a full page reload. The client supports:
 
@@ -152,39 +193,49 @@ The browser periodically refreshes api.php without requiring a full page reload.
 
 The browser does not directly poll every reflector. Public reflector dashboards are collected server-side and exposed through the local API.
 
- SQLite history
+SQLite history
 
 v6 retains the SQLite history subsystem introduced in v5. Historical observations are stored under:
 
+text
 /var/www/xlxd/dstar-monitor/data/
+
 
 The database is used for sampled availability/history. This measures whether the monitor successfully observed the reflector dashboard and should not be interpreted as a protocol-level guarantee that every D-STAR service was operational.
 
- Production installation path
+Production installation path
 
 The canonical installation directory is:
 
+text
 /var/www/xlxd/dstar-monitor
+
 
 Do not install this project under /var/www/html/dstar-monitor.
 
- Requirements
+Requirements
 
 Debian/Ubuntu example:
 
+bash
 sudo apt update
 sudo apt install apache2 php php-curl php-xml php-sqlite3 unzip
 
+
 Confirm required PHP modules:
 
-php -m | grep -E 'curl|dom|pdosqlite|sqlite3'
+bash
+php -m | grep -E 'curl|dom|pdo_sqlite|sqlite3'
 
- Upgrade from v5 or an earlier release
+
+Upgrade from v5 or an earlier release
 
 Back up the existing installation first:
 
+bash
 sudo cp -a /var/www/xlxd/dstar-monitor \
   /var/www/xlxd/dstar-monitor.backup-$(date +%Y%m%d-%H%M%S)
+
 
 Extract the v6 package into a temporary directory, then copy the project files into the production directory.
 
@@ -192,6 +243,7 @@ Preserve the existing SQLite history database if you want to retain collected hi
 
 Example:
 
+bash
 cd /path/to/extracted/v6
 
 sudo mkdir -p /var/www/xlxd/dstar-monitor
@@ -208,40 +260,51 @@ sudo chmod 775 \
   /var/www/xlxd/dstar-monitor/cache \
   /var/www/xlxd/dstar-monitor/data
 
+
 If you are upgrading an installation with an existing data/monitor.sqlite, verify that the database remains present after the copy.
 
- PHP validation
+PHP validation
 
 Run:
 
+bash
 cd /var/www/xlxd/dstar-monitor
 
 php -l config.php
 php -l functions.php
 php -l history.php
 php -l api.php
-php -l historyapi.php
+php -l history_api.php
 php -l index.php
+
 
 Then restart Apache:
 
+bash
 sudo systemctl restart apache2
 
- URLs
+
+URLs
 
 Main dashboard:
 
+text
 https://xlx839.dyndns.org/dstar-monitor/
+
 
 Current-state API:
 
+text
 https://xlx839.dyndns.org/dstar-monitor/api.php
+
 
 24-hour history example:
 
-https://xlx839.dyndns.org/dstar-monitor/historyapi.php?hours=24
+text
+https://xlx839.dyndns.org/dstar-monitor/history_api.php?hours=24
 
- Post-upgrade checks for v6
+
+Post-upgrade checks for v6
 
 After installing v6, verify these items in the live dashboard:
 
@@ -252,9 +315,9 @@ After installing v6, verify these items in the live dashboard:
 - REF Service information uses DREFD Version.
 - XLX Service information uses XLX Version and Dashboard Version.
 - DCS016 remains visible and is handled as a DCS reflector.
-- historyapi.php?hours=24 returns history data.
+- history_api.php?hours=24 returns history data.
 - Existing SQLite history is retained after an upgrade.
 
- Important monitoring note
+Important monitoring note
 
 This application monitors information exposed by public reflector dashboards. Dashboard reachability and parsed status are not identical to protocol-level D-STAR health. A reflector may require additional TCP/UDP or host-local checks if protocol-level availability monitoring is required.

@@ -1,14 +1,14 @@
-D-STAR Reflector Monitor v6.2.1
+D-STAR Reflector Monitor v6.2.2
 
-Maintenance release: fixes browser-side JavaScript syntax errors that could leave the 24-hour Availability History at 'Loading history…'. It also adds defensive handling for missing users/modules/peers arrays and ensures history initialization runs even if initial card rendering fails.
+Maintenance release: improves REF/DREFD and XLXD dashboard parsing, Last Heard normalization, Remote User reporting, and XLX module information while retaining the SQLite history reliability improvements from v6.2.1.
 
-# D-STAR Reflector Monitor — Production v6.2.1
+# D-STAR Reflector Monitor — Production v6.2.2
 
 Production web monitor for D-STAR reflector dashboards.
 
 ## Version
 
-**v6.2.1 — September 2026**
+**v6.2.2 — September 2026**
 
 v6 consolidates the production monitor and corrects four dashboard parsing/display issues:
 
@@ -31,6 +31,38 @@ v6 consolidates the production monitor and corrects four dashboard parsing/displ
 
 v6 retains the v5 client-side live monitoring and SQLite history features.
 
+
+## v6.2.2 Reflector parsing and module improvements
+
+v6.2.2 builds on v6.2.1 with additional production-tested reflector parsing and display improvements.
+
+- **REF/DREFD Remote Users**
+  - Parses Remote Users independently from Last Heard activity.
+  - Displays authoritative Remote User and Linked Gateway counts published by the reflector.
+  - Preserves User Message, Last TX On, and Type information.
+
+- **REF/DREFD Last Heard**
+  - Uses dashboard column headers rather than fixed column positions.
+  - Preserves Callsign, User Message, Last TX On, and Time.
+  - Keeps Last Heard activity separate from the current Remote Users table.
+
+- **XLXD Last Heard**
+  - Normalizes Country/Flag, Callsign, Suffix, Via/Peer, Last Heard, and Listening On/module fields.
+  - Correctly associates fields with their source dashboard rows.
+
+- **Network-wide Last Heard**
+  - Combines normalized REF/DREFD and XLXD Last Heard records.
+  - Removes duplicate/bogus records previously introduced from current-user data.
+  - Sorts activity chronologically across reflector families.
+
+- **XLXD Modules**
+  - Retrieves the dedicated XLXD `index.php?show=modules` dashboard.
+  - Parses module letter, name, current user count, and published protocol routing information.
+  - Supports the full configured XLX module list rather than only modules inferred from current activity.
+
+- **Safety and reliability**
+  - Retains the v6.2.1 SQLite WAL, busy-timeout, non-blocking history writer, and browser history protections.
+  - Runtime cache files and SQLite history databases remain excluded from Git.
 
 ## v6.2.1 SQLite concurrency and history reliability
 
