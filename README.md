@@ -1,14 +1,14 @@
-D-STAR Reflector Monitor v6.2.2
+D-STAR Reflector Monitor v6.2.3
 
 Maintenance release: improves REF/DREFD and XLXD dashboard parsing, Last Heard normalization, Remote User reporting, and XLX module information while retaining the SQLite history reliability improvements from v6.2.1.
 
-# D-STAR Reflector Monitor — Production v6.2.2
+# D-STAR Reflector Monitor — Production v6.2.3
 
 Production web monitor for D-STAR reflector dashboards.
 
 ## Version
 
-**v6.2.2 — September 2026**
+**v6.2.3 — September 2026**
 
 v6 consolidates the production monitor and corrects four dashboard parsing/display issues:
 
@@ -31,6 +31,15 @@ v6 consolidates the production monitor and corrects four dashboard parsing/displ
 
 v6 retains the v5 client-side live monitoring and SQLite history features.
 
+
+## v6.2.3 REF/DREFD Linked Gateways
+
+- Correctly parses the DREFD Linked Gateways table as a column-oriented Module A-E table.
+- Associates each published gateway with the correct REF module.
+- Prevents nested Remote Users and Last Heard data from leaking into module link information.
+- Displays actual linked gateway callsigns directly with the corresponding REF module.
+- Preserves Modules A-E when no gateways are connected without manufacturing an `unlinked` state.
+- Retains the authoritative DREFD published Linked Gateways count.
 
 ## v6.2.2 Reflector parsing and module improvements
 

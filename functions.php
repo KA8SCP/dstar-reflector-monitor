@@ -316,19 +316,75 @@ function parse_dplus(array $r, string $html, int $ms, string $url): array {
         $s['linked_gateway_count'] = (int)$m[2];
     }
 
-    // Linked Gateways / Reflectors. Preserve every available REF module, including unlinked ones.
+    // Linked Gateways / Reflectors. Preserve modules A-E and report only gateway links actually published by DREFD.
+    // REF/DREFD Linked Gateways table.
+    // Modules A-E are columns. Only accept rows that match the five-column
+    // gateway layout so nested Remote Users / Last Heard tables are ignored.
     foreach ($tables as $t) {
-        $all=strtolower(implode(' ',array_map(fn($r)=>implode(' ',$r),array_slice($t,0,3))));
-        if (!str_contains($all,'module') || !str_contains($all,'linked')) continue;
-        foreach ($t as $row) {
-            if (count($row)<1) continue;
-            $mod=strtoupper(trim($row[0]));
-            if (preg_match('/^[A-E]$/',$mod)) $s['modules'][]=['module'=>$mod,'name'=>'','users'=>null,'links'=>isset($row[1])&&$row[1]!==''?[$row[1]]:[]];
+        if (!$t) continue;
+
+        $headerRow = -1;
+        $moduleCols = [];
+
+        foreach (array_slice($t,0,4,true) as $ri=>$hdr) {
+            $candidate = [];
+
+            foreach ($hdr as $i=>$cell) {
+                if (preg_match('/^Module\s+([A-E])$/i', trim($cell), $m)) {
+                    $candidate[$i] = strtoupper($m[1]);
+                }
+            }
+
+            if (count($candidate) === 5) {
+                $headerRow = $ri;
+                $moduleCols = $candidate;
+                break;
+            }
         }
+
+        if ($headerRow < 0) continue;
+
+        $linksByModule = [
+            'A'=>[], 'B'=>[], 'C'=>[], 'D'=>[], 'E'=>[]
+        ];
+
+        foreach (array_slice($t,$headerRow+1) as $row) {
+            // A real Linked Gateways row has exactly the five module columns.
+            if (count($row) !== 5) continue;
+
+            foreach ($moduleCols as $i=>$mod) {
+                $gateway = trim($row[$i] ?? '');
+
+                if ($gateway === '') continue;
+
+                // DREFD gateway entries look like "KA1EAR B", "WB1GOF C", etc.
+                if (!preg_match('/^[A-Z0-9\/-]{3,12}\s+[A-Z]$/i', $gateway)) {
+                    continue;
+                }
+
+                if (!in_array($gateway,$linksByModule[$mod],true)) {
+                    $linksByModule[$mod][] = $gateway;
+                }
+            }
+        }
+
+        foreach ($linksByModule as $mod=>$links) {
+            $s['modules'][] = [
+                'module'=>$mod,
+                'name'=>'',
+                'users'=>null,
+                'links'=>$links
+            ];
+        }
+
+        break;
     }
-    // REF/DREFD reflectors expose modules A-E; include unlinked modules so the count is accurate.
+
+    // REF/DREFD reflectors expose modules A-E.
+    // Preserve any module information actually published by the dashboard,
+    // but do not manufacture an "unlinked" state when no link data is published.
     $existing=[]; foreach ($s['modules'] as $m) $existing[$m['module']]=$m;
-    foreach (range('A','E') as $mod) if (!isset($existing[$mod])) $existing[$mod]=['module'=>$mod,'name'=>'','users'=>null,'links'=>['unlinked']];
+    foreach (range('A','E') as $mod) if (!isset($existing[$mod])) $existing[$mod]=['module'=>$mod,'name'=>'','users'=>null,'links'=>[]];
     ksort($existing,SORT_STRING); $s['modules']=array_values($existing);
 
     // Remote Users table. The title may occupy its own row, so discover the real header row.

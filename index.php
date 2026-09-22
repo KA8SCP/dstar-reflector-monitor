@@ -116,7 +116,11 @@ function card(r){
   }
 
   if(r.type==='DPLUS'){
-   return `<span class="mod"><b>${esc(m.module)}</b></span>`;
+   const links=(m.links||[]).filter(Boolean);
+   const linkText=links.length
+    ? ` · ${links.map(x=>esc(x)).join(', ')}`
+    : '';
+   return `<span class="mod ${links.length?'active':''}"><b>${esc(m.module)}</b>${linkText}</span>`;
   }
 
   return `<span class="mod ${m.users>0?'active':''}"><b>${esc(m.module)}</b>${m.name?' · '+esc(m.name):''}${m.users!==null&&m.users!==undefined?' · '+esc(m.users)+' users':''}</span>`;
