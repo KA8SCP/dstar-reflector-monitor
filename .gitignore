@@ -5,3 +5,6 @@ data/*.sqlite*
 *.before-*
 *.bak
 *.backup
+
+# Broadcastify feed-owner credentials
+broadcastify.local.php

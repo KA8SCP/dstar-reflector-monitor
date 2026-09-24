@@ -183,7 +183,7 @@ function parse_xlxd(array $r, string $html, int $ms, string $url): array {
             foreach ($lower as $i=>$h) {
                 if ($h==='callsign') $map['callsign']=$i;
                 elseif (str_contains($h,'flag') || str_contains($h,'country')) $map['country']=$i;
-                elseif (str_contains($h,'suffix') || str_contains($h,'dprs')) $map['suffix']=$i;
+                elseif (str_contains($h,'suffix')) $map['suffix']=$i;
                 elseif (str_contains($h,'via') || str_contains($h,'peer')) $map['via']=$i;
                 elseif (str_contains($h,'last heard') || str_contains($h,'last tx')) $map['last_heard']=$i;
                 elseif (str_contains($h,'listening on') || $h==='module') $map['module']=$i;

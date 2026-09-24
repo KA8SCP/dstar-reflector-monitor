@@ -1,0 +1,6 @@
+<?php
+// Example only. Do NOT commit a real username/password.
+return [
+    'username' => 'YOUR_BROADCASTIFY_USERNAME',
+    'password' => 'YOUR_BROADCASTIFY_PASSWORD',
+];

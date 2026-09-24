@@ -32,7 +32,7 @@ header{padding:22px 18px;background:#0d1728;border-bottom:1px solid var(--line);
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px}.metric{background:var(--panel2);padding:9px;border-radius:8px}.metric b{display:block;font-size:16px}.metric span{font-size:11px;color:var(--muted)}
 section{padding:0 12px 12px}h3{font-size:13px;margin:5px 0 8px;color:#cbd5e1;border-bottom:1px solid var(--line);padding-bottom:6px}.modules{display:flex;gap:7px;flex-wrap:wrap}.mod{background:#263650;border:1px solid #3a4b67;border-radius:7px;padding:6px 9px}.mod.active{border-color:#168a4b;background:#0b3b27}.muted{color:var(--muted)}.servicegrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.serviceitem{background:var(--panel2);border-radius:8px;padding:9px 10px}.serviceitem .label{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}.serviceitem .value{font-weight:700;overflow-wrap:anywhere}@media(max-width:700px){.servicegrid{grid-template-columns:1fr}}
 .table{overflow:auto;max-height:260px;border:1px solid var(--line);border-radius:8px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}th{position:sticky;top:0;background:#17253a;color:#aebbd0}.call{font-weight:800;color:var(--blue)}a.button{display:inline-block;margin:0 12px 15px;padding:8px 11px;background:#263650;color:#fff;text-decoration:none;border-radius:7px}
-.alertbar{display:none;margin:0 0 12px;padding:10px 12px;border:1px solid var(--amber);border-radius:8px;background:#3b2b08;color:#fde68a}.activity{animation:pulse 1.2s ease-out}@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.65)}100%{box-shadow:0 0 0 12px rgba(34,197,94,0)}}.historygrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}.historyitem{background:var(--panel2);padding:9px;border-radius:8px}.network{margin:0 0 24px}.network h2{font-size:17px;margin:0 0 10px}.footer{color:var(--muted);padding:10px 0 30px;text-align:center}
+.alertbar{display:none;margin:0 0 12px;padding:10px 12px;border:1px solid var(--amber);border-radius:8px;background:#3b2b08;color:#fde68a}.activity{animation:pulse 1.2s ease-out}@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.65)}100%{box-shadow:0 0 0 12px rgba(34,197,94,0)}}.historygrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px}.historyitem{background:var(--panel2);padding:9px;border-radius:8px}.network{margin:0 0 24px}.network h2{font-size:17px;margin:0 0 10px}.audioPanel{margin:0 12px 12px;padding:10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px}.audioHead{display:flex;justify-content:space-between;gap:10px;align-items:center}.audioMeta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}.audioActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}.audioActions a{margin:0}.footer{color:var(--muted);padding:10px 0 30px;text-align:center}
 @media(max-width:700px){.stats{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,1fr)}.updated{width:100%;margin-left:0!important}}
 </style>
 </head>
@@ -48,7 +48,7 @@ section{padding:0 12px 12px}h3{font-size:13px;margin:5px 0 8px;color:#cbd5e1;bor
 </div>
 <div class="network panel" style="padding:14px">
 <h2>Network-wide Last Heard</h2>
-<div class="table"><table><thead><tr><th>Reflector</th><th>Country</th><th>Callsign</th><th>Suffix / User Message</th><th>Via / Peer</th><th>Time</th><th>Module / Last TX</th></tr></thead><tbody id="lastheard"></tbody></table></div>
+<div class="table"><table><thead><tr><th>Reflector</th><th>Module / Last TX</th><th>Callsign</th><th>Suffix / User Message</th><th>Via / Peer</th><th>Time</th><th>Country</th></tr></thead><tbody id="lastheard"></tbody></table></div>
 </div>
 <div class="network panel" style="padding:14px"><h2>24-hour Availability History</h2><div id="history" class="historygrid"><span class="muted">Loading history…</span></div></div>
 <div class="grid" id="cards"></div>
@@ -61,6 +61,7 @@ let data = initial;
 let previous = null;
 let lastSuccess = Date.now();
 let recentActivity = new Set();
+let broadcastify = null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function heardKey(x){return [x.reflector,x.callsign,x.module,x.time].join('|');}
 function detectChanges(oldData,newData){
@@ -94,7 +95,7 @@ function render(){
   const via=isREF?'N/A':(x.via||'—');
   const heard=isREF?(x.time||'—'):(x.last_heard||x.time||'—');
   const module=isREF?(x.last_tx_status||x.module||'—'):(x.module||'—');
-  return `<tr><td>${esc(x.reflector)}</td><td>${esc(country)}</td><td class="call">${esc(x.callsign)}</td><td>${esc(extra)}</td><td>${esc(via)}</td><td>${esc(heard)}</td><td>${esc(module)}</td></tr>`;
+  return `<tr><td>${esc(x.reflector)}</td><td>${esc(module)}</td><td class="call">${esc(x.callsign)}</td><td>${esc(extra)}</td><td>${esc(via)}</td><td>${esc(heard)}</td><td>${esc(country)}</td></tr>`;
  }).join('')||'<tr><td colspan="7" class="muted">No Last Heard data published.</td></tr>';
 }
 function serviceFields(r){
@@ -105,6 +106,19 @@ function serviceFields(r){
  if(r.type==='XLXD') return state+uptime+item('XLX Version',r.xlx_version)+item('Dashboard Version',r.dashboard_version);
  if(r.type==='DCS') return state+uptime+item('DCS Version',r.dcs_version);
  return state+uptime+item('Software',r.version);
+}
+function audioPanel(r){
+ if(r.name!=='REF049') return '';
+ if(!broadcastify) return `<section><h3>REF049C Audio</h3><div class="audioPanel"><span class="muted">Loading Broadcastify feed 45853…</span></div></section>`;
+ const b=broadcastify; const cls=b.online===true?'on':(b.online===false?'off':'muted');
+ const listeners=b.listeners===null||b.listeners===undefined?'—':b.listeners;
+ const checked=b.checked_at?new Date(b.checked_at).toLocaleTimeString():'—';
+ const note=!b.configured?'Feed-owner credentials not configured on this server.':(b.error?(b.stale?'Showing cached data; live status temporarily unavailable.':'Audio status temporarily unavailable.'):'REF049C and BrandMeister TG 312543 are the same bridged conversation.');
+ return `<section><h3>REF049C Audio</h3><div class="audioPanel"><div class="audioHead"><b>Broadcastify Feed ${esc(b.feed_id||45853)}</b><span class="status ${cls}">${esc(b.status_text||'UNAVAILABLE')}</span></div><div class="audioMeta"><div><span class="muted">Listeners</span><br><b>${esc(listeners)}</b></div><div><span class="muted">Bridge</span><br><b>BM TG 312543</b></div><div><span class="muted">Checked</span><br><b>${esc(checked)}</b></div></div><div class="muted" style="margin-top:8px">${esc(note)}</div><div class="audioActions"><a class="button" href="${esc(b.listen_url)}" target="_blank" rel="noopener">Listen to REF049C ↗</a><a class="button" href="${esc(b.archives_url)}" target="_blank" rel="noopener">Archives ↗</a></div></div></section>`;
+}
+async function loadBroadcastify(){
+ try{const c=new AbortController();const t=setTimeout(()=>c.abort(),7000);const r=await fetch('broadcastify_api.php?ts='+Date.now(),{cache:'no-store',signal:c.signal});clearTimeout(t);if(!r.ok)throw new Error('HTTP '+r.status);broadcastify=await r.json();render();}
+ catch(e){broadcastify={ok:false,configured:true,feed_id:45853,status_text:'UNAVAILABLE',online:null,listeners:null,checked_at:new Date().toISOString(),listen_url:'https://www.broadcastify.com/listen/feed/45853',archives_url:'https://www.broadcastify.com/archives/feed/45853',error:'Audio status temporarily unavailable.'};render();}
 }
 function card(r){
  const sortedMods=[...(r.modules||[])].sort((a,b)=>String(a.module||'').localeCompare(String(b.module||'')));
@@ -131,7 +145,7 @@ function card(r){
    return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.message||u.user||'')}</td><td>${esc(u.last_heard||u.module||'')}</td><td>${esc(u.type||'')}</td></tr>`;
   }
   if(r.type==='XLXD'){
-   return `<tr><td>${esc(u.country||'')}</td><td class="call">${esc(u.callsign)}</td><td>${esc(u.suffix||'')}</td><td>${esc(u.module)}</td><td>${esc(u.last_heard)}</td><td>${esc(u.via||'')}</td></tr>`;
+   return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.suffix||'')}</td><td>${esc(u.module)}</td><td>${esc(u.country||'')}</td><td>${esc(u.last_heard)}</td><td>${esc(u.via||'')}</td></tr>`;
   }
   return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.module)}</td><td>${esc(u.last_heard)}</td><td>${esc(u.via||u.user||u.message||u.type)}</td></tr>`;
  }).join(''):`<tr><td colspan="${r.type==='XLXD'?6:4}" class="muted">No current user data published.</td></tr>`;
@@ -157,12 +171,13 @@ function card(r){
  const userHead=r.type==='DPLUS'
   ? '<tr><th>Callsign</th><th>User Message</th><th>Last TX On</th><th>Type</th></tr>'
   : r.type==='XLXD'
-   ? '<tr><th>Country / Flag</th><th>Callsign</th><th>Suffix</th><th>Module</th><th>Last Heard</th><th>Via / Peer</th></tr>'
+   ? '<tr><th>Callsign</th><th>Suffix</th><th>Module</th><th>Country / Flag</th><th>Last Heard</th><th>Via / Peer</th></tr>'
    : '<tr><th>Callsign</th><th>Module</th><th>Last TX / Heard</th><th>Via / User</th></tr>';
  return `<article class="card ${recentActivity.has(r.name)?'activity':''}">
  <div class="chead"><div><div class="rname">${esc(r.name)}</div><div class="rtype">${esc(r.type)} · ${esc(r.host)}</div></div><div class="status ${r.online?'on':'off'}"><span class="dot ${r.online?'dgreen':'dred'}"></span>${r.online?'ONLINE':'OFFLINE'}</div></div>
  <div class="metrics">${firstMetric}${secondMetric}${thirdMetric}<div class="metric"><b>${r.response_ms??'—'}${r.response_ms?' ms':''}</b><span>Response</span></div></div>
  <section><h3>Service</h3><div class="servicegrid">${serviceFields(r)}</div></section>
+ ${audioPanel(r)}
  <section><h3>Modules</h3><div class="modules">${mods}</div></section>
  <section><h3>${r.type==='DPLUS'?'Remote Users':'Users / Activity'}</h3><div class="table"><table><thead>${userHead}</thead><tbody>${users}</tbody></table></div></section>
  ${r.type==='DPLUS'?'':r.type==='DCS'
@@ -182,9 +197,10 @@ document.querySelector('#filter').addEventListener('input',render);
 document.querySelector('#type').addEventListener('change',render);
 try { render(); } catch(e) { console.error('Initial render error:', e); }
 loadHistory();
+loadBroadcastify();
 staleCheck();
 if('Notification' in window && Notification.permission==='default') { document.addEventListener('click',()=>Notification.requestPermission(),{once:true}); }
-setInterval(refresh,REFRESH_MS); setInterval(staleCheck,5000); setInterval(loadHistory,60000);
+setInterval(refresh,REFRESH_MS); setInterval(staleCheck,5000); setInterval(loadHistory,60000); setInterval(loadBroadcastify,30000);
 </script>
 </body>
 </html>

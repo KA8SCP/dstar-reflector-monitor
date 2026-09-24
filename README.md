@@ -1,3 +1,13 @@
+D-STAR Reflector Monitor v6.3.0
+
+REF049C Broadcastify integration release. Adds an isolated, server-side Feed Owner API connector for Broadcastify feed 45853, a REF049C audio panel, listener/status display, Listen/Archives links, protected credential loading, 30-second caching, and failure isolation. REF049C and BrandMeister TG 312543 are treated as the same bridged conversation.
+
+## v6.3.0 setup
+
+Create `/etc/dstar-monitor/broadcastify.php` owned by root and readable by the Apache/PHP user. It must return an array containing `username` and `password`. Do not place credentials in JavaScript, `index.php`, Git, or the ZIP. The application can alternatively read `BROADCASTIFY_USERNAME` and `BROADCASTIFY_PASSWORD` environment variables.
+
+The new endpoint is `broadcastify_api.php`. Broadcastify failures are non-fatal and do not affect reflector polling or SQLite history. Phase 2 transcription/callsign extraction is intentionally not enabled in this release.
+
 D-STAR Reflector Monitor v6.2.4
 
 Maintenance release: adds expanded DCS016 monitoring, adds REF050 and REF069, and retains the REF/DREFD, XLXD, Last Heard, Remote User, module, and SQLite history improvements from earlier v6.2 releases.
