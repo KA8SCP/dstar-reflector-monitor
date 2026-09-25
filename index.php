@@ -140,7 +140,10 @@ function card(r){
 
   return `<span class="mod ${m.users>0?'active':''}"><b>${esc(m.module)}</b>${m.name?' · '+esc(m.name):''}${m.users!==null&&m.users!==undefined?' · '+esc(m.users)+' users':''}</span>`;
  }).join(''):'<span class="muted">No module data published</span>';
- const users=(r.users||[]).length?(r.users||[]).slice(0,50).map(u=>{
+const refLastHeard=r.type==='DPLUS' && Array.isArray(r.last_heard)
+ ? r.last_heard.slice(0,50).map(h=>`<tr><td class="call">${esc(h.callsign||'')}</td><td>${esc(h.message||'')}</td><td>${esc(h.module||h.last_tx_status||'')}</td><td>${esc(h.time||'')}</td></tr>`).join('')
+ : '';
+const users=(r.users||[]).length?(r.users||[]).slice(0,50).map(u=>{
   if(r.type==='DPLUS'){
    return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.message||u.user||'')}</td><td>${esc(u.last_heard||u.module||'')}</td><td>${esc(u.type||'')}</td></tr>`;
   }
@@ -189,7 +192,8 @@ function card(r){
  ${audioPanel(r)}
  <section><h3>Modules</h3><div class="modules">${mods}</div></section>
  <section><h3>${r.type==='DPLUS'?'Remote Users':'Users / Activity'}</h3><div class="table"><table><thead>${userHead}</thead><tbody>${users}</tbody></table></div></section>
-  ${r.type==='DPLUS'?'':r.type==='DCS'
+${r.type==='DPLUS' ? `<section><h3>Last Heard</h3><div class="table"><table><thead><tr><th>Callsign</th><th>User Message</th><th>Module</th><th>Time</th></tr></thead><tbody>${refLastHeard||'<tr><td colspan="4" class="muted">No Last Heard data published.</td></tr>'}</tbody></table></div></section>` : ''}
+ ${r.type==='DPLUS'?'':r.type==='DCS'
   ? `<section><h3>Connected Stations</h3><div class="table"><table><thead><tr><th>Station</th><th>Module</th><th>Band</th><th>DCS Group</th><th>Linked</th><th>Via</th></tr></thead><tbody>${peers}</tbody></table></div></section>`
   : r.type==='XLXD'
    ? `<section><h3>Repeaters / Nodes</h3><div class="table"><table><thead><tr><th>DV Station</th><th>Band</th><th>Protocol</th><th>Module</th><th>Country</th><th>Last Heard</th><th>Linked For</th></tr></thead><tbody>${peers}</tbody></table></div></section>`
