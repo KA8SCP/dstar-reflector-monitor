@@ -1,3 +1,11 @@
+D-STAR Reflector Monitor v6.3.2
+
+September 2026 REF Last Heard enhancement release.
+
+v6.3.2 changes
+
+REF/DPLUS reflector cards now include a dedicated Last Heard table showing Callsign, User Message, Module, and Time. Up to 50 Last Heard entries are displayed for each REF reflector. This enhancement does not change DCS, XLX, Peanut, Broadcastify, or the existing network-wide Last Heard display.
+
 D-STAR Reflector Monitor v6.3.1
 
 September 2026 maintenance and monitoring enhancement release.
