@@ -1,3 +1,58 @@
+D-STAR Reflector Monitor v6.3.1
+
+September 2026 maintenance and monitoring enhancement release.
+
+v6.3.1 changes
+
+XLX Repeaters / Nodes
+
+XLXD reflectors now retrieve the dedicated index.php?show=repeaters dashboard and display useful connected repeater/node information instead of the previous generic Peers/Links data.
+
+The XLX Repeaters / Nodes table displays:
+
+- DV Station
+- Band
+- Protocol
+- Module
+- Country
+- Last Heard
+- Linked For
+
+The IP address published by the XLX dashboard is intentionally not displayed.
+
+This enhancement applies to:
+
+- XLX038
+- XLX049
+- XLX139
+- XLX351
+- XLX978
+
+REF/DPLUS and DCS monitoring are unchanged by this feature.
+
+XLX978 Peanut room monitoring
+
+XLX978 now includes Peanut bridge status monitoring for:
+
+- XLX978A
+- XLX978D
+- XLX978G
+
+The Peanut Rooms table displays:
+
+- Room
+- Peanut status
+- Reflector status
+- AMBE Server status
+- Last Poll
+
+Room status is obtained from the Peanut room-status service. A dedicated server-side cache and lock prevent the Peanut service from being queried more frequently than once every 15 seconds.
+
+The published Peanut room-status endpoint provides room/bridge status but does not provide individual Peanut user callsigns. Therefore v6.3.1 does not report individual Peanut application users.
+
+These Peanut enhancements apply only to XLX978.
+
+
 D-STAR Reflector Monitor v6.3.0
 
 REF049C Broadcastify integration release. Adds an isolated, server-side Feed Owner API connector for Broadcastify feed 45853, a REF049C audio panel, listener/status display, Listen/Archives links, protected credential loading, 30-second caching, and failure isolation. REF049C and BrandMeister TG 312543 are treated as the same bridged conversation.
