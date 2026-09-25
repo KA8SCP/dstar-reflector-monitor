@@ -732,8 +732,104 @@ function save_cache(string $key, array $data): void {
     $file = __DIR__.'/cache/'.preg_replace('/[^A-Za-z0-9_-]/','_',$key).'.json';
     @file_put_contents($file, json_encode($data, JSON_UNESCAPED_SLASHES), LOCK_EX);
 }
+function load_cache_ttl(string $key, int $ttl): ?array {
+    $file = __DIR__.'/cache/'.preg_replace('/[^A-Za-z0-9_-]/','_',$key).'.json';
 
+    if (!is_file($file) || (time()-filemtime($file)) >= $ttl) {
+        return null;
+    }
 
+    $data = json_decode((string)file_get_contents($file), true);
+
+    return is_array($data) ? $data : null;
+}
+function parse_peanut_room_status(string $json, array $wantedRooms): array {
+    $data = json_decode($json, true);
+
+    if (!is_array($data)) {
+        return [];
+    }
+
+    $wanted = array_fill_keys(
+        array_map('strtoupper', $wantedRooms),
+        true
+    );
+
+    $rooms = [];
+
+    foreach ($data as $row) {
+        if (!is_array($row)) continue;
+
+        $room = strtoupper(trim((string)($row['room'] ?? '')));
+
+        if ($room === '' || !isset($wanted[$room])) {
+            continue;
+        }
+
+        $rooms[] = [
+            'room'       => $room,
+            'peanut'     => trim((string)($row['peanut'] ?? '')),
+            'reflector'  => trim((string)($row['reflector'] ?? '')),
+            'ambeserver' => trim((string)($row['ambeserver'] ?? '')),
+            'lastpoll'   => trim((string)($row['lastpoll'] ?? ''))
+        ];
+    }
+
+    usort(
+        $rooms,
+        fn($a, $b) => strcmp($a['room'], $b['room'])
+    );
+
+    return $rooms;
+}
+function get_peanut_xlx978_status(): array {
+    $cacheKey = 'peanut_xlx978';
+    $cached = load_cache_ttl($cacheKey, 15);
+
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $lockFile = __DIR__.'/cache/peanut_xlx978.lock';
+    $lock = @fopen($lockFile, 'c');
+
+    if ($lock === false) {
+        return [];
+    }
+
+    try {
+        if (!flock($lock, LOCK_EX)) {
+            return [];
+        }
+
+        // Another request may have refreshed the cache while we waited.
+        $cached = load_cache_ttl($cacheKey, 15);
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        $raw = fetch_url('https://peanut.pa7lim.nl/roomstatus_json.php');
+
+        if (!$raw['ok']) {
+            return [];
+        }
+
+        $rooms = parse_peanut_room_status(
+            $raw['body'],
+            ['XLX978A', 'XLX978D', 'XLX978G']
+        );
+
+        if ($rooms) {
+            save_cache($cacheKey, $rooms);
+        }
+
+        return $rooms;
+    } finally {
+        flock($lock, LOCK_UN);
+        fclose($lock);
+    }
+}
 function parse_xlxd_module_list(string $html): array {
     $modules = [];
 
@@ -799,7 +895,67 @@ function parse_xlxd_module_list(string $html): array {
 
     return $modules;
 }
+function parse_xlxd_repeaters(string $html): array {
+    $repeaters = [];
 
+    $dom = dom_from_html($html);
+    $tables = tables_from_dom($dom);
+
+    foreach ($tables as $t) {
+        if (!$t) continue;
+
+        $headerRow = -1;
+        $map = [];
+
+        foreach (array_slice($t, 0, 4, true) as $ri => $row) {
+            $lower = array_map(fn($v) => strtolower(trim($v)), $row);
+
+            if (
+                !in_array('dv station', $lower, true) ||
+                !in_array('protocol', $lower, true) ||
+                !in_array('module', $lower, true)
+            ) {
+                continue;
+            }
+
+            $headerRow = $ri;
+
+            foreach ($lower as $i => $h) {
+                if ($h === 'flag') $map['country'] = $i;
+                elseif ($h === 'dv station') $map['station'] = $i;
+                elseif ($h === 'band') $map['band'] = $i;
+                elseif ($h === 'last heard') $map['last_heard'] = $i;
+                elseif ($h === 'linked for') $map['linked_for'] = $i;
+                elseif ($h === 'protocol') $map['protocol'] = $i;
+                elseif ($h === 'module') $map['module'] = $i;
+            }
+
+            break;
+        }
+
+        if ($headerRow < 0 || !isset($map['station'])) continue;
+
+        foreach (array_slice($t, $headerRow + 1, MAX_PEERS) as $row) {
+            $station = trim($row[$map['station']] ?? '');
+
+            if ($station === '') continue;
+
+            $repeaters[] = [
+                'station'    => $station,
+                'band'       => trim($row[$map['band']] ?? ''),
+                'protocol'   => trim($row[$map['protocol']] ?? ''),
+                'module'     => trim($row[$map['module']] ?? ''),
+                'country'    => trim($row[$map['country']] ?? ''),
+                'last_heard' => trim($row[$map['last_heard']] ?? ''),
+                'linked_for' => trim($row[$map['linked_for']] ?? '')
+            ];
+        }
+
+        if ($repeaters) break;
+    }
+
+    return $repeaters;
+}
 function get_reflector(array $r): array {
     $cached = load_cache($r['name']);
     if ($cached) { $cached['cached']=true; return $cached; }
@@ -843,6 +999,37 @@ function get_reflector(array $r): array {
                     $s['modules'] = $moduleList;
                 }
             }
+        }
+        // Fetch XLXD Repeaters / Nodes connections.
+        $repeaterUrls = [];
+
+        foreach ($r['urls'] as $baseUrl) {
+            $parts = parse_url($baseUrl);
+
+            if (!$parts || empty($parts['host'])) continue;
+
+            $scheme = $parts['scheme'] ?? 'http';
+            $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+
+            $repeaterUrls[] =
+                $scheme.'://'.$parts['host'].$port.'/index.php?show=repeaters';
+        }
+
+        if ($repeaterUrls) {
+            $repeaterRaw = fetch_any($repeaterUrls);
+
+            if ($repeaterRaw['ok']) {
+                $repeaterList = parse_xlxd_repeaters($repeaterRaw['body']);
+
+                if ($repeaterList) {
+                    $s['peers'] = $repeaterList;
+                }
+            }
+        }
+
+        // Peanut room status is published only for the configured XLX978 rooms.
+        if (($r['name'] ?? '') === 'XLX978') {
+            $s['peanut_rooms'] = get_peanut_xlx978_status();
         }
     }
     elseif ($type === 'DCS') {

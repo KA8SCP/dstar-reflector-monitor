@@ -154,13 +154,22 @@ function card(r){
   ? (peerList.length
      ? peerList.map(p=>`<tr><td class="call">${esc(p.station||p.peer||'')}</td><td>${esc(p.module||'')}</td><td>${esc(p.band||'')}</td><td>${esc(p.group||'')}</td><td>${esc(p.linked||'')}</td><td>${esc(p.via||'')}</td></tr>`).join('')
      : '<tr><td colspan="6" class="muted">No connected stations published.</td></tr>')
-  : (peerList.length
-     ? peerList.map(p=>'<tr><td>'+esc(p.peer)+'</td><td>'+esc(p.details)+'</td></tr>').join('')
-     : '<tr><td colspan="2" class="muted">No peer data published.</td></tr>');
+  : r.type==='XLXD'
+   ? (peerList.length
+      ? peerList.map(p=>`<tr><td class="call">${esc(p.station||'')}</td><td>${esc(p.band||'')}</td><td>${esc(p.protocol||'')}</td><td>${esc(p.module||'')}</td><td>${esc(p.country||'')}</td><td>${esc(p.last_heard||'')}</td><td>${esc(p.linked_for||'')}</td></tr>`).join('')
+      : '<tr><td colspan="7" class="muted">No repeaters or nodes published.</td></tr>')
+   : (peerList.length
+      ? peerList.map(p=>'<tr><td>'+esc(p.peer)+'</td><td>'+esc(p.details)+'</td></tr>').join('')
+      : '<tr><td colspan="2" class="muted">No peer data published.</td></tr>');
+ const peanutRooms=(r.name==='XLX978' && Array.isArray(r.peanut_rooms))
+ ? r.peanut_rooms.map(p=>`<tr><td class="call">${esc(p.room||'')}</td><td>${esc(p.peanut||'')}</td><td>${esc(p.reflector||'')}</td><td>${esc(p.ambeserver||'')}</td><td>${esc(p.lastpoll||'')}</td></tr>`).join('')
+ : '';
  const thirdMetric=r.type==='DPLUS'
  ? `<div class="metric"><b>${(r.modules||[]).length}</b><span>Available Modules</span></div>`
  : r.type==='DCS'
  ? `<div class="metric"><b>${(r.peers||[]).length}</b><span>Connected Stations</span></div>`
+ : r.type==='XLXD'
+ ? `<div class="metric"><b>${(r.peers||[]).length}</b><span>Repeaters / Nodes</span></div>`
  : `<div class="metric"><b>${(r.peers||[]).length}</b><span>Peers</span></div>`;
  const firstMetric=r.type==='DPLUS'
   ? `<div class="metric"><b>${r.remote_user_count??0}</b><span>Remote Users</span></div>`
@@ -180,9 +189,12 @@ function card(r){
  ${audioPanel(r)}
  <section><h3>Modules</h3><div class="modules">${mods}</div></section>
  <section><h3>${r.type==='DPLUS'?'Remote Users':'Users / Activity'}</h3><div class="table"><table><thead>${userHead}</thead><tbody>${users}</tbody></table></div></section>
- ${r.type==='DPLUS'?'':r.type==='DCS'
+  ${r.type==='DPLUS'?'':r.type==='DCS'
   ? `<section><h3>Connected Stations</h3><div class="table"><table><thead><tr><th>Station</th><th>Module</th><th>Band</th><th>DCS Group</th><th>Linked</th><th>Via</th></tr></thead><tbody>${peers}</tbody></table></div></section>`
-  : `<section><h3>Peers / Links</h3><div class="table"><table><thead><tr><th>Peer</th><th>Details</th></tr></thead><tbody>${peers}</tbody></table></div></section>`}
+  : r.type==='XLXD'
+   ? `<section><h3>Repeaters / Nodes</h3><div class="table"><table><thead><tr><th>DV Station</th><th>Band</th><th>Protocol</th><th>Module</th><th>Country</th><th>Last Heard</th><th>Linked For</th></tr></thead><tbody>${peers}</tbody></table></div></section>`
+   : `<section><h3>Peers / Links</h3><div class="table"><table><thead><tr><th>Peer</th><th>Details</th></tr></thead><tbody>${peers}</tbody></table></div></section>`}
+ ${r.name==='XLX978' ? `<section><h3>Peanut Rooms</h3><div class="table"><table><thead><tr><th>Room</th><th>Peanut</th><th>Reflector</th><th>AMBE Server</th><th>Last Poll</th></tr></thead><tbody>${peanutRooms||'<tr><td colspan="5" class="muted">Peanut room status temporarily unavailable.</td></tr>'}</tbody></table></div></section>` : ''}
  <a class="button" href="${esc(r.url)}" target="_blank" rel="noopener">Open Dashboard ↗</a>
  </article>`;
 }
