@@ -1,3 +1,13 @@
+D-STAR Reflector Monitor v6.3.3
+
+September 2026 performance and XLX module filtering release.
+
+v6.3.3 changes
+
+XLX module lists now automatically omit disabled modules reported by the XLX dashboard with a name of "-", so the monitor follows each reflector's currently enabled module configuration without hard-coded module lists.
+
+Reflector caching now uses per-reflector non-blocking refresh locks with stale-cache fallback. When one request is refreshing an expired reflector cache, other requests can immediately use the previous cached data instead of duplicating the remote refresh or waiting for it to complete. This reduces PHP-FPM load and improves monitor responsiveness under multiple simultaneous clients.
+
 D-STAR Reflector Monitor v6.3.2
 
 September 2026 REF Last Heard enhancement release.
