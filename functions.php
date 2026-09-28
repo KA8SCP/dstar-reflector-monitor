@@ -728,6 +728,13 @@ function load_cache(string $key): ?array {
     return is_array($data) ? $data : null;
 }
 
+function load_cache_stale(string $key): ?array {
+    $file = __DIR__."/cache/".preg_replace("/[^A-Za-z0-9_-]/","_",$key).".json";
+    if (is_file($file) === false) return null;
+    $data = json_decode((string)file_get_contents($file), true);
+    return is_array($data) ? $data : null;
+}
+
 function save_cache(string $key, array $data): void {
     $file = __DIR__.'/cache/'.preg_replace('/[^A-Za-z0-9_-]/','_',$key).'.json';
     @file_put_contents($file, json_encode($data, JSON_UNESCAPED_SLASHES), LOCK_EX);
@@ -867,6 +874,7 @@ function parse_xlxd_module_list(string $html): array {
             if (!preg_match('/^[A-Z]$/', $mod)) continue;
 
             $name  = trim($row[1] ?? '');
+            if ($name === '-') continue;
             $users = trim($row[2] ?? '');
 
             $modules[] = [
@@ -960,6 +968,27 @@ function get_reflector(array $r): array {
     $cached = load_cache($r['name']);
     if ($cached) { $cached['cached']=true; return $cached; }
 
+    $lockFile = __DIR__.'/cache/'.preg_replace('/[^A-Za-z0-9_-]/','_',$r['name']).'.lock';
+    $lock = @fopen($lockFile, 'c');
+    if ($lock !== false && flock($lock, LOCK_EX | LOCK_NB) === false) {
+        fclose($lock);
+        $lock = false;
+        $stale = load_cache_stale($r['name']);
+        if ($stale) {
+            $stale['cached'] = true;
+            return $stale;
+        }
+    }
+    if ($lock !== false) {
+        $cached = load_cache($r['name']);
+        if ($cached) {
+            $cached['cached'] = true;
+            flock($lock, LOCK_UN);
+            fclose($lock);
+            return $cached;
+        }
+    }
+
     $raw = fetch_any($r['urls']);
     if (!$raw['ok']) {
         $s = blank_status($r);
@@ -967,6 +996,7 @@ function get_reflector(array $r): array {
         $s['error'] = $raw['error'] ?: ('HTTP '.$raw['http_code']);
         $s['http_code'] = $raw['http_code'];
         save_cache($r['name'], $s);
+        if ($lock !== false) { flock($lock, LOCK_UN); fclose($lock); }
         return $s;
     }
 
@@ -1172,6 +1202,7 @@ function get_reflector(array $r): array {
     $s['checked_at'] = gmdate('c');
     $s['cached'] = false;
     save_cache($r['name'],$s);
+    if ($lock !== false) { flock($lock, LOCK_UN); fclose($lock); }
     return $s;
 }
 
