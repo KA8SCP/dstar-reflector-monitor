@@ -37,7 +37,7 @@ section{padding:0 12px 12px}h3{font-size:13px;margin:5px 0 8px;color:#cbd5e1;bor
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="title">📡 D-STAR Reflector Network Monitor</div><div class="sub">REF/DPLUS · DCS · XLX/XLXD — REF038 · REF039 · REF040 · REF049 · REF050 · REF069 · DCS016 · XLX038 · XLX049 · XLX139 · XLX351 · XLX978</div></div></header>
+<header><div class="wrap"><div class="title">📡 D-STAR Reflector Network Monitor</div><div class="sub">REF/DPLUS · DCS · XLX/XLXD — REF038 · REF039 · REF040 · REF049 · REF050 · REF069 · DCS016 · XLX038 · XLX039 · XLX049 · XLX139 · XLX351 · XLX978</div></div></header>
 <main class="wrap">
 <div id="alertbar" class="alertbar"></div>
 <div class="stats" id="stats"></div>

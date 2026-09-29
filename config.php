@@ -83,6 +83,15 @@ $REFLECTORS = [
             'http://xlx038.dyndns.org/',
         ],
     ],
+    'XLX039' => [
+        'name' => 'XLX039',
+        'type' => 'XLXD',
+        'host' => 'xlx039.dyndns.org',
+        'urls' => [
+            'https://xlx039.dyndns.org/',
+            'http://xlx039.dyndns.org/',
+        ],
+    ],
     'XLX049' => [
         'name' => 'XLX049',
         'type' => 'XLXD',
