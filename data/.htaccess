@@ -1,0 +1,3 @@
+<FilesMatch "^viewers\.sqlite(?:-.*)?$">
+    Require all denied
+</FilesMatch>

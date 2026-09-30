@@ -26,7 +26,7 @@ $initial = [
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,-apple-system,Segoe UI,Arial,sans-serif}
 header{padding:22px 18px;background:#0d1728;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 .wrap{max-width:1600px;margin:auto;padding:0 18px}.title{font-size:28px;font-weight:800}.sub{color:var(--muted);margin-top:3px}
-.stats{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:12px;margin:18px auto}.stat,.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}.stat{padding:14px}.num{font-size:26px;font-weight:800}.lbl{color:var(--muted);font-size:12px}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:12px;margin:18px auto}.stat,.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}.stat{padding:14px}.num{font-size:26px;font-weight:800}.lbl{color:var(--muted);font-size:12px}
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}.toolbar input,.toolbar select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px 11px}.toolbar .updated{margin-left:auto;color:var(--muted)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(470px,1fr));gap:16px;padding-bottom:24px}.card{overflow:hidden}.chead{padding:15px 16px;background:var(--panel2);display:flex;justify-content:space-between;align-items:center}.rname{font-size:21px;font-weight:800}.rtype{color:var(--muted);font-size:12px}.status{font-weight:800}.on{color:var(--green)}.off{color:var(--red)}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}.dgreen{background:var(--green);box-shadow:0 0 8px var(--green)}.dred{background:var(--red)}
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px}.metric{background:var(--panel2);padding:9px;border-radius:8px}.metric b{display:block;font-size:16px}.metric span{font-size:11px;color:var(--muted)}
@@ -52,6 +52,9 @@ section{padding:0 12px 12px}h3{font-size:13px;margin:5px 0 8px;color:#cbd5e1;bor
 </div>
 <div class="network panel" style="padding:14px"><h2>24-hour Availability History</h2><div id="history" class="historygrid"><span class="muted">Loading history…</span></div></div>
 <div class="grid" id="cards"></div>
+<div class="network panel" style="padding:14px"><h2>Page Viewers</h2>
+<p class="muted">Open pages reporting within the last two minutes. Multiple tabs count separately; shared IP addresses may represent different people. Session IP addresses are visible here.</p>
+<div id="viewers">Loading viewer information…</div></div>
 <div class="footer">Auto-refresh every <?=REFRESH_SECONDS?> seconds · Data is read from public reflector dashboards.</div>
 </main>
 <script>
@@ -83,7 +86,7 @@ function render(){
  const rs=data.reflectors.filter(r=>(!type||r.type===type)&&(!f||[r.name,r.host,r.type,...(r.users||[]).map(x=>x.callsign||'')].join(' ').toLowerCase().includes(f)));
  const online=data.summary.online;
  document.querySelector('#stats').innerHTML=[
-  [''+data.summary.total,'Reflectors'],[''+online,'Online'],[''+data.summary.offline,'Offline'],[''+data.summary.users,'Reported Users'],[''+data.summary.modules,'Reported Modules']
+  [''+data.summary.total,'Reflectors'],[''+online,'Online'],[''+data.summary.offline,'Offline'],[''+data.summary.users,'Reported Users']
  ].map(x=>`<div class="stat"><div class="num">${esc(x[0])}</div><div class="lbl">${x[1]}</div></div>`).join('');
  document.querySelector('#updated').textContent='Updated '+new Date(data.updated).toLocaleString();
  document.querySelector('#cards').innerHTML=rs.map(card).join('');
@@ -209,6 +212,22 @@ async function refresh(){
   const next=await r.json(); detectChanges(data,next); previous=data; data=next; lastSuccess=Date.now(); render(); staleCheck();
  }catch(e){document.querySelector('#updated').textContent='Update failed: '+e.message+' · showing last data';}
 }
+
+// A new ID per page load also distinguishes duplicated tabs. No persistent tracking cookie.
+const viewerSession=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
+async function loadViewers(){
+ const el=document.querySelector('#viewers'), c=new AbortController();
+ const timer=setTimeout(()=>c.abort(),5000);
+ try{
+  const response=await fetch('viewers_api.php',{method:'POST',cache:'no-store',signal:c.signal,body:new URLSearchParams({session:viewerSession})});
+  if(!response.ok)throw new Error('Viewer request failed');
+  const v=await response.json();if(!v.ok)throw new Error('Viewer data unavailable');
+  el.innerHTML='<p><b>'+esc(v.active_sessions)+'</b> active sessions · <b>'+esc(v.unique_ips)+'</b> unique IP addresses</p><div class="table"><table><thead><tr><th>IP address</th><th>Sessions</th><th>Last seen</th></tr></thead><tbody>'+v.addresses.map(a=>'<tr><td>'+esc(a.ip)+'</td><td>'+esc(a.sessions)+'</td><td>'+esc(new Date(a.last_seen).toLocaleTimeString())+'</td></tr>').join('')+'</tbody></table></div>';
+ }catch(e){el.textContent='Viewer information temporarily unavailable.';}
+ finally{clearTimeout(timer);setTimeout(loadViewers,30000);}
+}
+loadViewers();
+
 document.querySelector('#filter').addEventListener('input',render);
 document.querySelector('#type').addEventListener('change',render);
 try { render(); } catch(e) { console.error('Initial render error:', e); }
