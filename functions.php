@@ -10,7 +10,7 @@ function blank_status(array $r): array {
         'response_ms' => null, 'checked_at' => gmdate('c'),
         'uptime' => null, 'version' => null, 'drefd_version' => null,
         'xlx_version' => null, 'dashboard_version' => null, 'dcs_version' => null, 'description' => null,
-        'users' => [], 'modules' => [], 'peers' => [], 'last_heard' => [],
+        'users' => [], 'modules' => [], 'peers' => [], 'nxdn_peers' => [], 'p25_peers' => [], 'last_heard' => [],
         'error' => null,
     ];
 }
@@ -943,7 +943,7 @@ function parse_xlxd_repeaters(string $html): array {
 
         if ($headerRow < 0 || !isset($map['station'])) continue;
 
-        foreach (array_slice($t, $headerRow + 1, MAX_PEERS) as $row) {
+        foreach (array_slice($t, $headerRow + 1) as $row) {
             $station = trim($row[$map['station']] ?? '');
 
             if ($station === '') continue;
@@ -963,6 +963,39 @@ function parse_xlxd_repeaters(string $html): array {
     }
 
     return $repeaters;
+}
+
+function parse_xlxd_protocol_peers(string $html, string $protocol): array {
+    $peers = [];
+    $dom = dom_from_html($html);
+    foreach (tables_from_dom($dom) as $t) {
+        if (!$t) continue;
+        $headerRow = -1;
+        $map = [];
+        foreach (array_slice($t, 0, 5, true) as $ri => $row) {
+            $lower = array_map(fn($v) => strtolower(trim($v)), $row);
+            $stationHeader = $protocol === 'NXDN' ? 'nxdn repeater' : 'p25 repeater';
+            if (!in_array($stationHeader, $lower, true)) continue;
+            $headerRow = $ri;
+            foreach ($lower as $i => $h) {
+                if ($h === 'flag') $map['country'] = $i;
+                elseif ($h === $stationHeader) $map['station'] = $i;
+            }
+            break;
+        }
+        if ($headerRow < 0 || !isset($map['station'])) continue;
+        foreach (array_slice($t, $headerRow + 1) as $row) {
+            $station = trim($row[$map['station']] ?? '');
+            if ($station === '') continue;
+            $peers[] = [
+                'station' => $station,
+                'country' => trim($row[$map['country']] ?? ''),
+                'protocol' => $protocol,
+            ];
+        }
+        if ($peers) break;
+    }
+    return $peers;
 }
 function get_reflector(array $r): array {
     $cached = load_cache($r['name']);
@@ -1054,6 +1087,24 @@ function get_reflector(array $r): array {
                 if ($repeaterList) {
                     $s['peers'] = $repeaterList;
                 }
+            }
+        }
+
+        // XLXD publishes NXDN and P25 peers on dedicated dashboard pages.
+        foreach (['nxdn' => 'NXDN', 'p25' => 'P25'] as $page => $protocol) {
+            $peerUrls = [];
+            foreach ($r['urls'] as $baseUrl) {
+                $parts = parse_url($baseUrl);
+                if (!$parts || empty($parts['host'])) continue;
+                $scheme = $parts['scheme'] ?? 'http';
+                $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+                $peerUrls[] = $scheme.'://'.$parts['host'].$port.'/index.php?show='.$page.'peers';
+            }
+            if (!$peerUrls) continue;
+            $peerRaw = fetch_any($peerUrls);
+            if ($peerRaw['ok']) {
+                $parsed = parse_xlxd_protocol_peers($peerRaw['body'], $protocol);
+                if ($parsed) $s[strtolower($protocol).'_peers'] = $parsed;
             }
         }
 

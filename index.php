@@ -37,7 +37,7 @@ section{padding:0 12px 12px}h3{font-size:13px;margin:5px 0 8px;color:#cbd5e1;bor
 </style>
 </head>
 <body>
-<header><div class="wrap"><div class="title">📡 D-STAR Reflector Network Monitor</div><div class="sub">REF/DPLUS · DCS · XLX/XLXD — REF038 · REF039 · REF040 · REF049 · REF050 · REF069 · DCS016 · XLX038 · XLX039 · XLX049 · XLX139 · XLX351 · XLX978</div></div></header>
+<header><div class="wrap"><div class="title">📡 D-STAR Reflector Network Monitor</div><div class="sub">REF/DPLUS · DCS · XLX/XLXD — REF038 · REF039 · REF040 · REF049 · REF050 · REF069 · DCS016 · XLX038 · XLX039 · XLX049 · XLX139 · XLX351 · XLX405 · XLX978</div></div></header>
 <main class="wrap">
 <div id="alertbar" class="alertbar"></div>
 <div class="stats" id="stats"></div>
@@ -239,6 +239,7 @@ ${r.type==='DPLUS' ? `<section><h3>Last Heard</h3><div class="table"><table><the
   : r.type==='XLXD'
    ? `<section><h3>Repeaters / Nodes</h3><div class="table"><table><thead><tr><th>DV Station</th><th>Band</th><th>Protocol</th><th>Module</th><th>Country</th><th>Last Heard</th><th>Linked For</th></tr></thead><tbody>${peers}</tbody></table></div></section>`
    : `<section><h3>Peers / Links</h3><div class="table"><table><thead><tr><th>Peer</th><th>Details</th></tr></thead><tbody>${peers}</tbody></table></div></section>`}
+ ${r.type==='XLXD' ? `<section><h3>NXDN Peers</h3><div class="table"><table><thead><tr><th>Repeater</th><th>Country</th></tr></thead><tbody>${(r.nxdn_peers||[]).map(p=>`<tr><td class="call">${esc(p.station||'')}</td><td>${esc(p.country||'')}</td></tr>`).join('')||'<tr><td colspan="2" class="muted">No NXDN peers published.</td></tr>'}</tbody></table></div></section><section><h3>P25 Peers</h3><div class="table"><table><thead><tr><th>Repeater</th><th>Country</th></tr></thead><tbody>${(r.p25_peers||[]).map(p=>`<tr><td class="call">${esc(p.station||'')}</td><td>${esc(p.country||'')}</td></tr>`).join('')||'<tr><td colspan="2" class="muted">No P25 peers published.</td></tr>'}</tbody></table></div></section>` : ''}
  ${r.name==='XLX978' ? `<section><h3>Peanut Rooms</h3><div class="table"><table><thead><tr><th>Room</th><th>Peanut</th><th>Reflector</th><th>AMBE Server</th><th>Last Poll</th></tr></thead><tbody>${peanutRooms||'<tr><td colspan="5" class="muted">Peanut room status temporarily unavailable.</td></tr>'}</tbody></table></div></section>` : ''}
  <a class="button" href="${esc(r.url)}" target="_blank" rel="noopener">Open Dashboard ↗</a>
  </article>`;
