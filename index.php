@@ -26,7 +26,7 @@ $initial = [
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,-apple-system,Segoe UI,Arial,sans-serif}
 header{padding:22px 18px;background:#0d1728;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 .wrap{max-width:1600px;margin:auto;padding:0 18px}.title{font-size:28px;font-weight:800}.sub{color:var(--muted);margin-top:3px}
-.stats{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:12px;margin:18px auto}.stat,.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}.stat{padding:14px}.num{font-size:26px;font-weight:800}.lbl{color:var(--muted);font-size:12px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(130px,1fr));gap:12px;margin:18px auto}.stat,.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px}.stat{padding:14px}.num{font-size:26px;font-weight:800}.lbl{color:var(--muted);font-size:12px}
 .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}.toolbar input,.toolbar select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:9px 11px}.toolbar .updated{margin-left:auto;color:var(--muted)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(470px,1fr));gap:16px;padding-bottom:24px}.card{overflow:hidden}.chead{padding:15px 16px;background:var(--panel2);display:flex;justify-content:space-between;align-items:center}.rname{font-size:21px;font-weight:800}.rtype{color:var(--muted);font-size:12px}.status{font-weight:800}.on{color:var(--green)}.off{color:var(--red)}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}.dgreen{background:var(--green);box-shadow:0 0 8px var(--green)}.dred{background:var(--red)}
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px}.metric{background:var(--panel2);padding:9px;border-radius:8px}.metric b{display:block;font-size:16px}.metric span{font-size:11px;color:var(--muted)}
@@ -55,7 +55,7 @@ section{padding:0 12px 12px}h3{font-size:13px;margin:5px 0 8px;color:#cbd5e1;bor
 <div class="network panel" style="padding:14px"><h2>Page Viewers</h2>
 <p class="muted">Open pages reporting within the last two minutes. Multiple tabs count separately; shared IP addresses may represent different people. Session IP addresses are visible here.</p>
 <div id="viewers">Loading viewer information…</div></div>
-<div class="footer">Auto-refresh every <?=REFRESH_SECONDS?> seconds · Data is read from public reflector dashboards.</div>
+<div class="footer">Auto-refresh every <?=REFRESH_SECONDS?> seconds · Display timezone: America/New_York (EDT/EST). Reflector times without a timezone are assumed Eastern; missing seconds display as :00. EDT/EST marks an ambiguous fall-back hour. · Data is read from public reflector dashboards.</div>
 </main>
 <script>
 const initial = <?=json_encode($initial,JSON_UNESCAPED_SLASHES)?>;
@@ -66,6 +66,44 @@ let lastSuccess = Date.now();
 let recentActivity = new Set();
 let broadcastify = null;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// Unzoned reflector wall times are assumed to use America/New_York.
+const easternDateTime=new Intl.DateTimeFormat('en-US',{
+ timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit',
+ hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',timeZoneName:'short'
+});
+function easternParts(date){
+ return Object.fromEntries(easternDateTime.formatToParts(date).map(x=>[x.type,x.value]));
+}
+function easternText(p){return p.year+'-'+p.month+'-'+p.day+' '+p.hour+':'+p.minute+':'+p.second+' '+p.timeZoneName;}
+function displayDateTime(value){
+ const raw=String(value??'').trim();if(!raw)return '—';
+ // Offset-bearing timestamps represent actual instants, regardless of browser timezone.
+ if(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw)){
+  const date=new Date(raw);return Number.isFinite(date.getTime())?easternText(easternParts(date)):raw;
+ }
+ let m=raw.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\s+(EST|EDT|UTC|GMT))?$/i);
+ if(!m){
+  const d=raw.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?(?:\s+(EST|EDT|UTC|GMT))?$/i);
+  if(d)m=[d[0],d[3],d[2],d[1],d[4],d[5],d[6],d[7]];
+ }
+ if(!m)return raw; // Durations, module letters, and unknown formats are not dates.
+ const wall=m[1]+'-'+m[2]+'-'+m[3]+' '+m[4]+':'+m[5]+':'+(m[6]||'00');
+ const base=new Date(wall.replace(' ','T')+'Z');
+ if(!Number.isFinite(base.getTime())||base.toISOString().slice(0,19).replace('T',' ')!==wall)return raw;
+ const zone=(m[7]||'').toUpperCase();
+ if(zone){
+  const hours={EST:5,EDT:4,UTC:0,GMT:0}[zone];
+  return easternText(easternParts(new Date(base.getTime()+hours*3600000)));
+ }
+ // Match both Eastern offsets to reject nonexistent spring-forward wall times.
+ const matches=[4,5].map(h=>easternParts(new Date(base.getTime()+h*3600000)))
+  .filter(p=>easternText(p).slice(0,19)===wall);
+ if(matches.length===1)return easternText(matches[0]);
+ if(matches.length===2)return wall+' EDT/EST'; // Repeated autumn hour: source gives no way to distinguish.
+ return raw;
+}
+
 function heardKey(x){return [x.reflector,x.callsign,x.module,x.time].join('|');}
 function detectChanges(oldData,newData){
  recentActivity=new Set(); if(!oldData) return;
@@ -86,9 +124,9 @@ function render(){
  const rs=data.reflectors.filter(r=>(!type||r.type===type)&&(!f||[r.name,r.host,r.type,...(r.users||[]).map(x=>x.callsign||'')].join(' ').toLowerCase().includes(f)));
  const online=data.summary.online;
  document.querySelector('#stats').innerHTML=[
-  [''+data.summary.total,'Reflectors'],[''+online,'Online'],[''+data.summary.offline,'Offline'],[''+data.summary.users,'Reported Users']
+  [''+data.summary.total,'Reflectors'],[''+online,'Online'],[''+data.summary.offline,'Offline']
  ].map(x=>`<div class="stat"><div class="num">${esc(x[0])}</div><div class="lbl">${x[1]}</div></div>`).join('');
- document.querySelector('#updated').textContent='Updated '+new Date(data.updated).toLocaleString();
+ document.querySelector('#updated').textContent='Updated '+displayDateTime(data.updated);
  document.querySelector('#cards').innerHTML=rs.map(card).join('');
  document.querySelector('#lastheard').innerHTML=(data.last_heard||[]).slice(0,100).map(x=>{
   const isREF=x.type==='DPLUS' || String(x.reflector||'').startsWith('REF');
@@ -98,7 +136,7 @@ function render(){
   const via=isREF?'N/A':(x.via||'—');
   const heard=isREF?(x.time||'—'):(x.last_heard||x.time||'—');
   const module=isREF?(x.last_tx_status||x.module||'—'):(x.module||'—');
-  return `<tr><td>${esc(x.reflector)}</td><td>${esc(module)}</td><td class="call">${esc(x.callsign)}</td><td>${esc(extra)}</td><td>${esc(via)}</td><td>${esc(heard)}</td><td>${esc(country)}</td></tr>`;
+  return `<tr><td>${esc(x.reflector)}</td><td>${esc(module)}</td><td class="call">${esc(x.callsign)}</td><td>${esc(extra)}</td><td>${esc(via)}</td><td>${esc(displayDateTime(heard))}</td><td>${esc(country)}</td></tr>`;
  }).join('')||'<tr><td colspan="7" class="muted">No Last Heard data published.</td></tr>';
 }
 function serviceFields(r){
@@ -115,7 +153,7 @@ function audioPanel(r){
  if(!broadcastify) return `<section><h3>REF049C Audio</h3><div class="audioPanel"><span class="muted">Loading Broadcastify feed 45853…</span></div></section>`;
  const b=broadcastify; const cls=b.online===true?'on':(b.online===false?'off':'muted');
  const listeners=b.listeners===null||b.listeners===undefined?'—':b.listeners;
- const checked=b.checked_at?new Date(b.checked_at).toLocaleTimeString():'—';
+ const checked=displayDateTime(b.checked_at);
  const note=!b.configured?'Feed-owner credentials not configured on this server.':(b.error?(b.stale?'Showing cached data; live status temporarily unavailable.':'Audio status temporarily unavailable.'):'REF049C and BrandMeister TG 312543 are the same bridged conversation.');
  return `<section><h3>REF049C Audio</h3><div class="audioPanel"><div class="audioHead"><b>Broadcastify Feed ${esc(b.feed_id||45853)}</b><span class="status ${cls}">${esc(b.status_text||'UNAVAILABLE')}</span></div><div class="audioMeta"><div><span class="muted">Listeners</span><br><b>${esc(listeners)}</b></div><div><span class="muted">Bridge</span><br><b>BM TG 312543</b></div><div><span class="muted">Checked</span><br><b>${esc(checked)}</b></div></div><div class="muted" style="margin-top:8px">${esc(note)}</div><div class="audioActions"><a class="button" href="${esc(b.listen_url)}" target="_blank" rel="noopener">Listen to REF049C ↗</a><a class="button" href="${esc(b.archives_url)}" target="_blank" rel="noopener">Archives ↗</a></div></div></section>`;
 }
@@ -144,31 +182,31 @@ function card(r){
   return `<span class="mod ${m.users>0?'active':''}"><b>${esc(m.module)}</b>${m.name?' · '+esc(m.name):''}${m.users!==null&&m.users!==undefined?' · '+esc(m.users)+' users':''}</span>`;
  }).join(''):'<span class="muted">No module data published</span>';
 const refLastHeard=r.type==='DPLUS' && Array.isArray(r.last_heard)
- ? r.last_heard.slice(0,50).map(h=>`<tr><td class="call">${esc(h.callsign||'')}</td><td>${esc(h.message||'')}</td><td>${esc(h.module||h.last_tx_status||'')}</td><td>${esc(h.time||'')}</td></tr>`).join('')
+ ? r.last_heard.slice(0,50).map(h=>`<tr><td class="call">${esc(h.callsign||'')}</td><td>${esc(h.message||'')}</td><td>${esc(h.module||h.last_tx_status||'')}</td><td>${esc(displayDateTime(h.time||''))}</td></tr>`).join('')
  : '';
 const users=(r.users||[]).length?(r.users||[]).slice(0,50).map(u=>{
   if(r.type==='DPLUS'){
-   return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.message||u.user||'')}</td><td>${esc(u.last_heard||u.module||'')}</td><td>${esc(u.type||'')}</td></tr>`;
+   return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.message||u.user||'')}</td><td>${esc(displayDateTime(u.last_heard||u.module||''))}</td><td>${esc(u.type||'')}</td></tr>`;
   }
   if(r.type==='XLXD'){
-   return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.suffix||'')}</td><td>${esc(u.module)}</td><td>${esc(u.country||'')}</td><td>${esc(u.last_heard)}</td><td>${esc(u.via||'')}</td></tr>`;
+   return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.suffix||'')}</td><td>${esc(u.module)}</td><td>${esc(u.country||'')}</td><td>${esc(displayDateTime(u.last_heard))}</td><td>${esc(u.via||'')}</td></tr>`;
   }
-  return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.module)}</td><td>${esc(u.last_heard)}</td><td>${esc(u.via||u.user||u.message||u.type)}</td></tr>`;
+  return `<tr><td class="call">${esc(u.callsign)}</td><td>${esc(u.module)}</td><td>${esc(displayDateTime(u.last_heard))}</td><td>${esc(u.via||u.user||u.message||u.type)}</td></tr>`;
  }).join(''):`<tr><td colspan="${r.type==='XLXD'?6:4}" class="muted">No current user data published.</td></tr>`;
  const peerList=r.peers||[];
  const peers=r.type==='DCS'
   ? (peerList.length
-     ? peerList.map(p=>`<tr><td class="call">${esc(p.station||p.peer||'')}</td><td>${esc(p.module||'')}</td><td>${esc(p.band||'')}</td><td>${esc(p.group||'')}</td><td>${esc(p.linked||'')}</td><td>${esc(p.via||'')}</td></tr>`).join('')
+     ? peerList.map(p=>`<tr><td class="call">${esc(p.station||p.peer||'')}</td><td>${esc(p.module||'')}</td><td>${esc(p.band||'')}</td><td>${esc(p.group||'')}</td><td>${esc(displayDateTime(p.linked||''))}</td><td>${esc(p.via||'')}</td></tr>`).join('')
      : '<tr><td colspan="6" class="muted">No connected stations published.</td></tr>')
   : r.type==='XLXD'
    ? (peerList.length
-      ? peerList.map(p=>`<tr><td class="call">${esc(p.station||'')}</td><td>${esc(p.band||'')}</td><td>${esc(p.protocol||'')}</td><td>${esc(p.module||'')}</td><td>${esc(p.country||'')}</td><td>${esc(p.last_heard||'')}</td><td>${esc(p.linked_for||'')}</td></tr>`).join('')
+      ? peerList.map(p=>`<tr><td class="call">${esc(p.station||'')}</td><td>${esc(p.band||'')}</td><td>${esc(p.protocol||'')}</td><td>${esc(p.module||'')}</td><td>${esc(p.country||'')}</td><td>${esc(displayDateTime(p.last_heard||''))}</td><td>${esc(p.linked_for||'')}</td></tr>`).join('')
       : '<tr><td colspan="7" class="muted">No repeaters or nodes published.</td></tr>')
    : (peerList.length
       ? peerList.map(p=>'<tr><td>'+esc(p.peer)+'</td><td>'+esc(p.details)+'</td></tr>').join('')
       : '<tr><td colspan="2" class="muted">No peer data published.</td></tr>');
  const peanutRooms=(r.name==='XLX978' && Array.isArray(r.peanut_rooms))
- ? r.peanut_rooms.map(p=>`<tr><td class="call">${esc(p.room||'')}</td><td>${esc(p.peanut||'')}</td><td>${esc(p.reflector||'')}</td><td>${esc(p.ambeserver||'')}</td><td>${esc(p.lastpoll||'')}</td></tr>`).join('')
+ ? r.peanut_rooms.map(p=>`<tr><td class="call">${esc(p.room||'')}</td><td>${esc(p.peanut||'')}</td><td>${esc(p.reflector||'')}</td><td>${esc(p.ambeserver||'')}</td><td>${esc(displayDateTime(p.lastpoll||''))}</td></tr>`).join('')
  : '';
  const thirdMetric=r.type==='DPLUS'
  ? `<div class="metric"><b>${(r.modules||[]).length}</b><span>Available Modules</span></div>`
@@ -222,7 +260,7 @@ async function loadViewers(){
   const response=await fetch('viewers_api.php',{method:'POST',cache:'no-store',signal:c.signal,body:new URLSearchParams({session:viewerSession})});
   if(!response.ok)throw new Error('Viewer request failed');
   const v=await response.json();if(!v.ok)throw new Error('Viewer data unavailable');
-  el.innerHTML='<p><b>'+esc(v.active_sessions)+'</b> active sessions · <b>'+esc(v.unique_ips)+'</b> unique IP addresses</p><div class="table"><table><thead><tr><th>IP address</th><th>Sessions</th><th>Last seen</th></tr></thead><tbody>'+v.addresses.map(a=>'<tr><td>'+esc(a.ip)+'</td><td>'+esc(a.sessions)+'</td><td>'+esc(new Date(a.last_seen).toLocaleTimeString())+'</td></tr>').join('')+'</tbody></table></div>';
+  el.innerHTML='<p><b>'+esc(v.active_sessions)+'</b> active sessions · <b>'+esc(v.unique_ips)+'</b> unique IP addresses</p><div class="table"><table><thead><tr><th>IP address</th><th>Sessions</th><th>Last seen</th></tr></thead><tbody>'+v.addresses.map(a=>'<tr><td>'+esc(a.ip)+'</td><td>'+esc(a.sessions)+'</td><td>'+esc(displayDateTime(a.last_seen))+'</td></tr>').join('')+'</tbody></table></div>';
  }catch(e){el.textContent='Viewer information temporarily unavailable.';}
  finally{clearTimeout(timer);setTimeout(loadViewers,30000);}
 }
