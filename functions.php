@@ -10,7 +10,7 @@ function blank_status(array $r): array {
         'response_ms' => null, 'checked_at' => gmdate('c'),
         'uptime' => null, 'version' => null, 'drefd_version' => null,
         'xlx_version' => null, 'dashboard_version' => null, 'dcs_version' => null, 'description' => null,
-        'users' => [], 'modules' => [], 'peers' => [], 'nxdn_peers' => [], 'p25_peers' => [], 'last_heard' => [],
+        'users' => [], 'modules' => [], 'peers' => [], 'nxdn_peers' => [], 'p25_peers' => [], 'nxdn_available' => false, 'p25_available' => false, 'last_heard' => [],
         'error' => null,
     ];
 }
@@ -965,6 +965,27 @@ function parse_xlxd_repeaters(string $html): array {
     return $repeaters;
 }
 
+function xlxd_protocol_peers_available(string $html, string $protocol): bool {
+    $header = strtoupper($protocol) === 'NXDN'
+        ? 'nxdn repeater'
+        : 'p25 repeater';
+
+    foreach (tables_from_dom(dom_from_html($html)) as $table) {
+        foreach (array_slice($table, 0, 5) as $row) {
+            $columns = array_map(
+                fn($value) => strtolower(trim($value)),
+                $row
+            );
+
+            if (in_array($header, $columns, true)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 function parse_xlxd_protocol_peers(string $html, string $protocol): array {
     $peers = [];
     $dom = dom_from_html($html);
@@ -1103,8 +1124,17 @@ function get_reflector(array $r): array {
             if (!$peerUrls) continue;
             $peerRaw = fetch_any($peerUrls);
             if ($peerRaw['ok']) {
-                $parsed = parse_xlxd_protocol_peers($peerRaw['body'], $protocol);
-                if ($parsed) $s[strtolower($protocol).'_peers'] = $parsed;
+                $key = strtolower($protocol);
+                $s[$key.'_available'] = xlxd_protocol_peers_available(
+                    $peerRaw['body'],
+                    $protocol
+                );
+                if ($s[$key.'_available']) {
+                    $s[$key.'_peers'] = parse_xlxd_protocol_peers(
+                        $peerRaw['body'],
+                        $protocol
+                    );
+                }
             }
         }
 
