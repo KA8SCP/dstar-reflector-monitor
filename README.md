@@ -1,3 +1,25 @@
+D-STAR Reflector Monitor v6.3.4
+
+October 11, 2026 reflector expansion and dashboard display update.
+
+v6.3.4 changes
+
+- Adds XLX039 (xlx039.dyndns.org), XLX405 (xlx405.va3uv.com), and XLX839 (xlx839.dyndns.org).
+- Retrieves XLXD NXDN and P25 peer tables from index.php?show=nxdnpeers and index.php?show=p25peers, displaying Repeater and Country.
+- Exposes nxdn_available and p25_available in reflector status. Each frontend peer section appears only when its corresponding dashboard table is detected. An empty published table remains available and displays "No NXDN peers published." or "No P25 peers published."
+- Reads all published XLX repeater/node rows instead of truncating them at MAX_PEERS.
+- Standardizes supported timestamp displays to America/New_York (EDT/EST). Offset-bearing timestamps are converted to Eastern time; unzoned reflector timestamps are assumed Eastern. Missing seconds display as :00; an ambiguous fall-back hour is marked EDT/EST. Durations and unrecognized formats retain their source text.
+- Adds Page Viewers with active page sessions, unique IP addresses, sessions per IP, and last-seen timestamps. Pages report every 30 seconds; sessions expire after two minutes. Multiple tabs count separately, and session IP addresses are displayed publicly. Viewer tracking uses viewers.php and viewers_api.php with separate SQLite storage.
+- Simplifies the summary to Reflectors, Online, and Offline.
+
+NXDN/P25 availability means dashboard publication, not actual daemon status. If a dashboard adds or removes a protocol table, the corresponding section follows the next successful refresh after cached data expires. Removing a daemon alone does not hide a section while its dashboard still publishes the table. XLX839 currently publishes empty NXDN/P25 tables despite those services having been removed.
+
+Current monitored reflectors:
+REF038, REF039, REF040, REF049, REF050, REF069, DCS016,
+XLX038, XLX039, XLX049, XLX139, XLX351, XLX405, XLX839, XLX978.
+
+Earlier version notes follow.
+
 D-STAR Reflector Monitor v6.3.3
 
 September 2026 performance and XLX module filtering release.
@@ -85,13 +107,13 @@ D-STAR Reflector Monitor v6.2.4
 
 Maintenance release: adds expanded DCS016 monitoring, adds REF050 and REF069, and retains the REF/DREFD, XLXD, Last Heard, Remote User, module, and SQLite history improvements from earlier v6.2 releases.
 
-# D-STAR Reflector Monitor — Production v6.2.4
+# D-STAR Reflector Monitor — Production v6.3.4
 
 Production web monitor for D-STAR reflector dashboards.
 
 ## Version
 
-**v6.2.4 — September 2026**
+**v6.3.4 — October 11, 2026**
 
 v6 consolidates the production monitor and corrects four dashboard parsing/display issues:
 
