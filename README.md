@@ -1,3 +1,20 @@
+D-STAR Reflector Monitor v6.3.5
+
+November 25, 2026 maintenance release.
+
+v6.3.5 changes
+
+- Removes decommissioned XLX039 and XLX351 from active monitoring.
+- Corrects the page header to include XLX839.
+- Retains 13 configured reflectors and preserves existing historical records.
+- Preserves v6.3.4 parsing, module filtering, caching/locking, viewer tracking,
+  NXDN/P25 monitoring, and Eastern date/time formatting.
+
+Current monitored reflectors:
+REF038, REF039, REF040, REF049, REF050, REF069, DCS016, XLX038, XLX049, XLX139, XLX405, XLX978, XLX839.
+
+Earlier version notes follow.
+
 D-STAR Reflector Monitor v6.3.4
 
 October 11, 2026 reflector expansion and dashboard display update.
@@ -14,7 +31,7 @@ v6.3.4 changes
 
 NXDN/P25 availability means dashboard publication, not actual daemon status. If a dashboard adds or removes a protocol table, the corresponding section follows the next successful refresh after cached data expires. Removing a daemon alone does not hide a section while its dashboard still publishes the table. XLX839 currently publishes empty NXDN/P25 tables despite those services having been removed.
 
-Current monitored reflectors:
+Monitored reflectors at v6.3.4:
 REF038, REF039, REF040, REF049, REF050, REF069, DCS016,
 XLX038, XLX039, XLX049, XLX139, XLX351, XLX405, XLX839, XLX978.
 
@@ -107,13 +124,13 @@ D-STAR Reflector Monitor v6.2.4
 
 Maintenance release: adds expanded DCS016 monitoring, adds REF050 and REF069, and retains the REF/DREFD, XLXD, Last Heard, Remote User, module, and SQLite history improvements from earlier v6.2 releases.
 
-# D-STAR Reflector Monitor — Production v6.3.4
+# D-STAR Reflector Monitor — Production v6.3.5
 
 Production web monitor for D-STAR reflector dashboards.
 
 ## Version
 
-**v6.3.4 — October 11, 2026**
+**v6.3.5 — November 25, 2026**
 
 v6 consolidates the production monitor and corrects four dashboard parsing/display issues:
 
@@ -280,18 +297,21 @@ No new lock/read-only messages should appear.
 
 ## Monitored reflectors
 
-The configured production set contains 10 reflectors:
+The configured production set contains 13 reflectors:
 
-- REF038 — `ref038.dstargateway.org`
-- REF039 — `ref039.dstargateway.org`
-- REF040 — `ref040.dstargateway.org`
-- REF049 — `ref049.dstargateway.org`
-- XLX038 — `xlx038.dyndns.org`
-- XLX049 — `xlx049.dyndns.org`
-- XLX139 — `xlx139.dyndns.org`
-- XLX351 — `xlx351.dyndns.org`
-- XLX978 — `xlx978.dyndns.org`
-- DCS016 — `http://dcs016.xreflector.net/dcs/`
+- REF038 — ref038.dstargateway.org
+- REF039 — ref039.dstargateway.org
+- REF040 — ref040.dstargateway.org
+- REF049 — ref049.dstargateway.org
+- REF050 — ref050.dstargateway.org
+- REF069 — ref069.dstargateway.org
+- DCS016 — dcs016.xreflector.net
+- XLX038 — xlx038.dyndns.org
+- XLX049 — xlx049.dyndns.org
+- XLX139 — xlx139.dyndns.org
+- XLX405 — xlx405.va3uv.com
+- XLX978 — xlx978.dyndns.org
+- XLX839 — xlx839.dyndns.org
 
 ## Reflector-family Service fields
 
