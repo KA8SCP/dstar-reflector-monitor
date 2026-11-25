@@ -83,15 +83,6 @@ $REFLECTORS = [
             'http://xlx038.dyndns.org/',
         ],
     ],
-    'XLX039' => [
-        'name' => 'XLX039',
-        'type' => 'XLXD',
-        'host' => 'xlx039.dyndns.org',
-        'urls' => [
-            'https://xlx039.dyndns.org/',
-            'http://xlx039.dyndns.org/',
-        ],
-    ],
     'XLX049' => [
         'name' => 'XLX049',
         'type' => 'XLXD',
@@ -108,15 +99,6 @@ $REFLECTORS = [
         'urls' => [
             'https://xlx139.dyndns.org/',
             'http://xlx139.dyndns.org/',
-        ],
-    ],
-    'XLX351' => [
-        'name' => 'XLX351',
-        'type' => 'XLXD',
-        'host' => 'xlx351.dyndns.org',
-        'urls' => [
-            'https://xlx351.dyndns.org/',
-            'http://xlx351.dyndns.org/',
         ],
     ],
     'XLX405' => [
